@@ -24,11 +24,28 @@ remains the one that costs nothing.
 
 ## Building
 
+MapStick depends on a fork of nudl through a path dependency, because it needs
+a library API and a downloader that can keep archives in a separate working
+directory from the output. Both changes are backward compatible and meant to go
+upstream. Until they do, check the fork out beside this repository:
+
 ```bash
-cargo build --release
+git clone https://github.com/MikolajQ/nudl.git
+git -C nudl switch separate-work-dir
+git clone https://github.com/MikolajQ/mapstick.git
+cd mapstick && cargo build --release
 ```
 
+The two working copies must be siblings — `crates/mapstick/Cargo.toml` points at
+`../../../nudl`.
+
 The resulting executable will be in `target/release/mapstick`.
+
+### Platform support
+
+The removable media backend is implemented for Linux only so far, over udisks2.
+Windows and macOS are planned and sit behind the same interface in
+`crates/mapstick-media`.
 
 ## License
 
