@@ -11,6 +11,7 @@ use std::{
 use anyhow::{Result, anyhow};
 use cap_std::{ambient_authority, fs::Dir};
 use mapstick_media::Medium;
+use mapstick_store::{Favourite, InstalledSource, LastSelection, Store};
 use nudl::{
     cli::Brand,
     client::{CarInfo, FirmwareInfo, NuClient, NuClientBuilder},
@@ -43,6 +44,9 @@ const REGIONS: &[(&str, &str)] = &[
 ];
 
 const BRANDS: &[Brand] = &[Brand::Hyundai, Brand::Kia, Brand::Genesis];
+/// Nazwy marek zapisywane w pliku ulubionych — stabilne, niezależne od kolejności
+/// w liście rozwijanej.
+const BRAND_NAMES: &[&str] = &["hyundai", "kia", "genesis"];
 
 const CONCURRENCY: usize = 4;
 const RETRIES: u8 = 3;
@@ -51,6 +55,9 @@ const UI_REFRESH: Duration = Duration::from_millis(100);
 /// Polecenia płynące z wątku interfejsu do zadania sieciowego.
 #[derive(Debug)]
 enum Cmd {
+    Startup,
+    ToggleFavourite,
+    OpenFavourite(String),
     LoadModels { brand: usize, region: usize },
     Filter(String),
     Select(usize),
@@ -114,6 +121,14 @@ fn work_directory() -> PathBuf {
         .unwrap_or_else(std::env::temp_dir);
 
     base.join("mapstick").join("archiwa")
+}
+
+fn brand_index(name: &str) -> usize {
+    BRAND_NAMES.iter().position(|b| *b == name).unwrap_or(0)
+}
+
+fn region_index(code: &str) -> usize {
+    REGIONS.iter().position(|(c, _)| *c == code).unwrap_or(0)
 }
 
 /// Sumaryczny rozmiar katalogu, licząc podkatalogi.
@@ -185,6 +200,10 @@ struct Worker {
     pending_format: Option<usize>,
     /// Gdy prawda, archiwa lądują na nośniku razem z wynikiem.
     direct_to_medium: bool,
+    store: Store,
+    store_path: PathBuf,
+    /// Model do zaznaczenia, gdy tylko lista modeli będzie gotowa.
+    pending_select: Option<String>,
 }
 
 impl Worker {
@@ -203,6 +222,9 @@ impl Worker {
             media: Vec::new(),
             pending_format: None,
             direct_to_medium: false,
+            store: Store::default(),
+            store_path: mapstick_store::default_path(),
+            pending_select: None,
         }
     }
 
@@ -259,6 +281,150 @@ impl Worker {
         self.firmware = None;
     }
 
+    // ---------------- ulubione ----------------
+
+    /// Pozycja bieżącej marki w [`BRANDS`].
+    fn brand_position(&self) -> usize {
+        BRANDS
+            .iter()
+            .position(|b| b.as_code_str() == self.brand.as_code_str())
+            .unwrap_or(0)
+    }
+
+    fn save_store(&self) {
+        if let Err(e) = self.store.save(&self.store_path) {
+            tracing::warn!("Nie udało się zapisać ulubionych: {e}");
+        }
+    }
+
+    fn push_favourites(&self) {
+        let rows: Vec<FavouriteRow> = self
+            .store
+            .items
+            .iter()
+            .map(|f| {
+                let (status, has_update) = match f.has_update() {
+                    Some(true) => ("nowa wersja", true),
+                    Some(false) => ("bez zmian", false),
+                    None => ("wersja nieznana", false),
+                };
+
+                // Pokazujemy to, co uznajemy za obecne w aucie; gdy tego nie
+                // wiemy — najnowsze dostępne, wyraźnie opisane.
+                let version = match (&f.installed_version, &f.latest_seen_version) {
+                    (Some(v), _) => v.clone(),
+                    (None, Some(v)) => format!("dostępna: {v}"),
+                    (None, None) => "—".to_owned(),
+                };
+
+                FavouriteRow {
+                    model_id: f.model_id.as_str().into(),
+                    label: f.label.as_str().into(),
+                    version: version.into(),
+                    status: status.into(),
+                    has_update,
+                }
+            })
+            .collect();
+
+        let empty = self.store.items.is_empty();
+
+        self.with_ui(move |ui| {
+            ui.set_favourites(ModelRc::new(VecModel::from(rows)));
+            ui.set_favourites_note(if empty {
+                "Wybierz model i naciśnij „Dodaj do ulubionych”, żeby widzieć tu jego wersję \
+                 przy każdym uruchomieniu."
+                    .into()
+            } else {
+                "".into()
+            });
+        });
+    }
+
+    fn push_selected_favourite_state(&self) {
+        let is_favourite = self
+            .selected
+            .map(|i| self.store.contains(&self.entries[i].car.id))
+            .unwrap_or(false);
+
+        self.with_ui(move |ui| ui.set_selected_is_favourite(is_favourite));
+    }
+
+    fn toggle_favourite(&mut self) {
+        let Some(index) = self.selected else {
+            return;
+        };
+        let car = &self.entries[index].car;
+
+        if self.store.remove(&car.id) {
+            self.set_status(format!("{} usunięty z ulubionych.", car.name), false);
+        } else {
+            self.store.upsert(Favourite {
+                label: car.name.clone(),
+                brand: BRAND_NAMES[self.brand_position()].to_owned(),
+                region: self.region.clone(),
+                model_id: car.id.clone(),
+                model_name: car.model.clone(),
+                latest_seen_version: car.versions.first().cloned(),
+                latest_checked_at: Some(mapstick_store::now()),
+                downloaded_version: None,
+                downloaded_at: None,
+                installed_version: None,
+                installed_source: None,
+                installed_confirmed: false,
+                vin: None,
+            });
+            self.set_status(format!("{} dodany do ulubionych.", car.name), false);
+        }
+
+        self.save_store();
+        self.push_favourites();
+        self.push_selected_favourite_state();
+    }
+
+    /// Odświeża wersje wszystkich ulubionych — po jednym zapytaniu na
+    /// kombinację marki i regionu, bo lista modeli i tak przychodzi w całości.
+    async fn refresh_favourites(&mut self) {
+        let mut combos: Vec<(String, String)> = self
+            .store
+            .items
+            .iter()
+            .map(|f| (f.brand.clone(), f.region.clone()))
+            .collect();
+        combos.sort();
+        combos.dedup();
+
+        for (brand, region) in combos {
+            let code = BRANDS[brand_index(&brand)].as_code_str();
+
+            let cars = match self.fetch_cars(code, &region).await {
+                Ok(cars) => cars,
+                Err(e) => {
+                    tracing::warn!("Nie udało się sprawdzić {brand}/{region}: {e}");
+                    continue;
+                }
+            };
+
+            for car in &cars {
+                if let Some(favourite) = self.store.get_mut(&car.id) {
+                    favourite.latest_seen_version = car.versions.first().cloned();
+                    favourite.latest_checked_at = Some(mapstick_store::now());
+                }
+            }
+        }
+
+        self.save_store();
+        self.push_favourites();
+    }
+
+    async fn fetch_cars(&self, brand_code: &str, region: &str) -> Result<Vec<CarInfo>> {
+        let client = self.client().await?;
+        client.validate_region(brand_code, region).await?;
+        let guid = client.get_guid(region).await?;
+
+        Ok(client.get_cars(region, &guid, brand_code).await?)
+    }
+
     async fn client(&self) -> Result<NuClient> {
         Ok(NuClientBuilder::new().build()?)
     }
@@ -303,6 +469,17 @@ impl Worker {
         self.push_rows();
 
         self.set_status(format!("Znaleziono {count} modeli."), false);
+
+        // Odtworzenie ostatniego wyboru albo skok z ulubionych.
+        if let Some(id) = self.pending_select.take()
+            && let Some(visible) = self
+                .filtered
+                .iter()
+                .position(|&i| self.entries[i].car.id == id)
+        {
+            self.select(visible).await?;
+        }
+
         Ok(())
     }
 
@@ -323,6 +500,14 @@ impl Worker {
             entry.released.clone(),
         );
         let visible = visible_index as i32;
+
+        self.store.last_selection = Some(LastSelection {
+            brand: BRAND_NAMES[self.brand_position()].to_owned(),
+            region: self.region.clone(),
+            model_id: Some(entry.car.id.clone()),
+        });
+        self.save_store();
+        self.push_selected_favourite_state();
 
         self.with_ui(move |ui| {
             ui.set_selected_index(visible);
@@ -581,6 +766,7 @@ impl Worker {
             Ok(media) => {
                 let count = media.len();
                 self.media = media;
+                self.learn_installed_from_media();
                 self.push_media_rows();
 
                 if count == 0 {
@@ -600,6 +786,48 @@ impl Worker {
         }
 
         self.with_ui(|ui| ui.set_media_busy(false));
+    }
+
+    /// Zapisuje w ulubionych to, co znaleziono na podłączonych nośnikach.
+    ///
+    /// Plik `.ver` na pendrivie to najpewniejsze źródło wiedzy o wersji
+    /// siedzącej w aucie — pod warunkiem, że użytkownik aktualizował właśnie
+    /// tym nośnikiem. Dlatego zapisujemy z adnotacją źródła i bez znacznika
+    /// potwierdzenia; ten należy do człowieka, który sprawdzi wersję na ekranie
+    /// nawigacji.
+    fn learn_installed_from_media(&mut self) {
+        let found: Vec<_> = self
+            .media
+            .iter()
+            .filter_map(|m| m.mount_point.as_deref())
+            .filter_map(|p| mapstick_media::read_installed(p).ok().flatten())
+            .collect();
+
+        let mut changed = false;
+
+        for installed in found {
+            let Some(favourite) = self.store.get_mut(&installed.model_id) else {
+                continue;
+            };
+
+            if favourite.installed_version.as_deref() != Some(&installed.firmware_version) {
+                favourite.installed_version = Some(installed.firmware_version.clone());
+                favourite.installed_source = Some(InstalledSource::VerFile);
+                favourite.installed_confirmed = false;
+                changed = true;
+
+                tracing::info!(
+                    "{}: wersja w aucie odczytana z nośnika — {}",
+                    installed.model_id,
+                    installed.firmware_version
+                );
+            }
+        }
+
+        if changed {
+            self.save_store();
+            self.push_favourites();
+        }
     }
 
     fn select_medium(&mut self, index: usize) {
@@ -846,6 +1074,71 @@ impl Worker {
         });
     }
 
+    /// Odtwarza stan po uruchomieniu: ulubione, ich wersje i ostatni model.
+    async fn startup(&mut self) {
+        self.store = match Store::load(&self.store_path) {
+            Ok(store) => store,
+            Err(e) => {
+                self.set_status(format!("Nie udało się wczytać ulubionych: {e}"), true);
+                Store::default()
+            }
+        };
+
+        self.push_favourites();
+
+        if !self.store.items.is_empty() {
+            self.set_status("Sprawdzanie wersji ulubionych…", false);
+            self.refresh_favourites().await;
+        }
+
+        let Some(last) = self.store.last_selection.clone() else {
+            self.set_status(
+                "Wybierz markę i region, a potem naciśnij „Pokaż modele”.",
+                false,
+            );
+            return;
+        };
+
+        let (brand, region) = (brand_index(&last.brand), region_index(&last.region));
+        let (b, r) = (brand as i32, region as i32);
+        self.with_ui(move |ui| {
+            ui.set_brand_index(b);
+            ui.set_region_index(r);
+        });
+
+        self.pending_select = last.model_id;
+
+        if let Err(e) = self.load_models(brand, region).await {
+            self.set_status(format!("Nie udało się pobrać listy: {e}"), true);
+        }
+    }
+
+    async fn open_favourite(&mut self, model_id: String) {
+        let Some(favourite) = self.store.find(&model_id) else {
+            return;
+        };
+
+        let (brand, region) = (
+            brand_index(&favourite.brand),
+            region_index(&favourite.region),
+        );
+        let (b, r) = (brand as i32, region as i32);
+        self.with_ui(move |ui| {
+            ui.set_page(0);
+            ui.set_brand_index(b);
+            ui.set_region_index(r);
+        });
+
+        self.pending_select = Some(model_id);
+        self.set_busy(true);
+
+        if let Err(e) = self.load_models(brand, region).await {
+            self.set_status(format!("Nie udało się pobrać listy: {e}"), true);
+        }
+
+        self.set_busy(false);
+    }
+
     async fn run(mut self, mut rx: UnboundedReceiver<Cmd>) {
         while let Some(cmd) = rx.recv().await {
             match cmd {
@@ -884,6 +1177,9 @@ impl Worker {
                     self.push_media_rows();
                 }
                 Cmd::ClearCache => self.clear_cache(),
+                Cmd::Startup => self.startup().await,
+                Cmd::ToggleFavourite => self.toggle_favourite(),
+                Cmd::OpenFavourite(id) => self.open_favourite(id).await,
                 Cmd::GoToMedia => {
                     let summary = match (&self.selected, self.required_bytes()) {
                         (Some(i), needed) if needed > 0 => format!(
@@ -950,6 +1246,8 @@ fn main() -> Result<()> {
 
     // Pomoc dla testów na maszynie bez sterowania myszą: MAPSTICK_DEV=lista
     // wczytuje modele, MAPSTICK_DEV=nosnik dodatkowo wchodzi w widok nośnika.
+    let _ = tx.send(Cmd::Startup);
+
     if let Ok(stage @ ("lista" | "nosnik")) = std::env::var("MAPSTICK_DEV").as_deref() {
         let _ = tx.send(Cmd::LoadModels {
             brand: 0,
@@ -961,6 +1259,10 @@ fn main() -> Result<()> {
         }
 
         let _ = tx.send(Cmd::Select(0));
+
+        if std::env::var_os("MAPSTICK_DEV_FAV").is_some() {
+            let _ = tx.send(Cmd::ToggleFavourite);
+        }
 
         if std::env::var_os("MAPSTICK_DEV_DIRECT").is_some() {
             let _ = tx.send(Cmd::SetDirectMode(true));
@@ -1060,7 +1362,17 @@ fn wire_callbacks(ui: &AppWindow, tx: UnboundedSender<Cmd>) {
         let _ = t.send(Cmd::SetDirectMode(direct));
     });
 
+    let t = tx.clone();
     ui.on_clear_cache(move || {
-        let _ = tx.send(Cmd::ClearCache);
+        let _ = t.send(Cmd::ClearCache);
+    });
+
+    let t = tx.clone();
+    ui.on_toggle_favourite(move || {
+        let _ = t.send(Cmd::ToggleFavourite);
+    });
+
+    ui.on_open_favourite(move |id| {
+        let _ = tx.send(Cmd::OpenFavourite(id.to_string()));
     });
 }

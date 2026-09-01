@@ -3281,6 +3281,7 @@ dependencies = [
  "anyhow",
  "cap-std",
  "mapstick-media",
+ "mapstick-store",
  "nudl",
  "rfd",
  "rustls",
@@ -3302,6 +3303,18 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "zbus",
+]
+
+[[package]]
+name = "mapstick-store"
+version = "0.1.0"
+dependencies = [
+ "jiff",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tracing",
 ]
 
 [[package]]
