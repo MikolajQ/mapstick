@@ -3,7 +3,10 @@
 
 //! MapStick — graficzna nakładka na nudl.
 
-use std::{path::PathBuf, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use anyhow::{Result, anyhow};
 use cap_std::{ambient_authority, fs::Dir};
@@ -55,6 +58,7 @@ enum Cmd {
     StartDownload,
     Cancel,
     SetDirectMode(bool),
+    ClearCache,
     GoToMedia,
     GoBack,
     RefreshMedia,
@@ -110,6 +114,22 @@ fn work_directory() -> PathBuf {
         .unwrap_or_else(std::env::temp_dir);
 
     base.join("mapstick").join("archiwa")
+}
+
+/// Sumaryczny rozmiar katalogu, licząc podkatalogi.
+fn directory_size(path: &Path) -> u64 {
+    let Ok(entries) = std::fs::read_dir(path) else {
+        return 0;
+    };
+
+    entries
+        .flatten()
+        .map(|e| match e.file_type() {
+            Ok(t) if t.is_dir() => directory_size(&e.path()),
+            Ok(_) => e.metadata().map(|m| m.len()).unwrap_or(0),
+            Err(_) => 0,
+        })
+        .sum()
 }
 
 /// Ile bajtów poleci przez sieć i ile zajmie na nośniku.
@@ -378,6 +398,56 @@ impl Worker {
             .unwrap_or(0)
     }
 
+    /// Czy we wskazanym celu leży już dokładnie ta wersja, którą chcemy wgrać.
+    ///
+    /// Sprawdzamy sam katalog docelowy, a nie to, który nośnik został kliknięty
+    /// — inaczej wybranie katalogu ręcznie omijałoby kontrolę.
+    fn push_target_state(&self) {
+        let current = match (&self.output_dir, self.selected) {
+            (Some(dir), Some(index)) => {
+                let car = &self.entries[index].car;
+
+                mapstick_media::read_installed(dir)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|i| {
+                        i.model_id == car.id && car.versions.contains(&i.firmware_version)
+                    })
+            }
+            _ => false,
+        };
+
+        tracing::info!("cel zawiera bieżącą wersję: {current}");
+        self.with_ui(move |ui| ui.set_target_has_current(current));
+    }
+
+    /// Ile miejsca zajmują archiwa pozostałe po wcześniejszych pobraniach.
+    fn push_leftovers(&self) {
+        let size = directory_size(&work_directory());
+        let text = if size > 0 {
+            format_size(size)
+        } else {
+            String::new()
+        };
+
+        tracing::info!("pozostałości archiwów: {} B", size);
+        self.with_ui(move |ui| ui.set_leftovers(text.into()));
+    }
+
+    fn clear_cache(&self) {
+        let work = work_directory();
+
+        match std::fs::remove_dir_all(&work) {
+            Ok(()) => self.set_status("Pozostałości archiwów usunięte.", false),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                self.set_status("Nie ma czego usuwać.", false)
+            }
+            Err(e) => self.set_status(format!("Nie udało się posprzątać: {e}"), true),
+        }
+
+        self.push_leftovers();
+    }
+
     /// Opis zapotrzebowania na miejsce, pokazywany przy przełączniku trybu.
     fn push_space_note(&self) {
         let Some(firmware) = &self.firmware else {
@@ -393,8 +463,9 @@ impl Worker {
         let (note, warning) = if self.direct_to_medium {
             (
                 format!(
-                    "Nośnik musi pomieścić naraz archiwa i wynik: ok. {}. Zapis na kość pamięci jest \
-                     przez to podwojony.",
+                    "Nośnik musi pomieścić naraz archiwa i wynik ich rozpakowywania: ok. {}. \
+                     Zapis na kość pamięci jest przez to podwojony. Używaj, jeśli masz duży \
+                     nośnik i nie masz miejsca na dysku.",
                     format_size(download + extracted)
                 ),
                 true,
@@ -461,7 +532,7 @@ impl Worker {
                     _ if !m.is_exfat() => ("wymaga exFAT".to_owned(), false),
                     // Ta sama wersja: nudl pominie wszystkie pliki, więc
                     // pobieranie skończy się natychmiast i niczego nie zmieni.
-                    _ if same_version => ("ta wersja już tu jest".to_owned(), true),
+                    _ if same_version => ("na nośniku jest już bieżąca wersja".to_owned(), true),
                     _ if needed > 0 && !m.fits(needed) => ("za mało miejsca".to_owned(), false),
                     // Nazwy plików niosą numer wersji, więc stary komplet nie
                     // zostanie nadpisany ani usunięty — zostanie obok nowego.
@@ -551,6 +622,8 @@ impl Worker {
             ui.set_selected_medium(visible);
             ui.set_output_dir(shown.into());
         });
+
+        self.push_target_state();
     }
 
     fn request_format(&mut self, index: usize) {
@@ -620,6 +693,7 @@ impl Worker {
         self.output_dir = Some(path);
 
         self.with_ui(move |ui| ui.set_output_dir(shown.into()));
+        self.push_target_state();
     }
 
     fn start_download(&mut self) -> Result<()> {
@@ -642,6 +716,9 @@ impl Worker {
         // Domyślnie archiwa lądują na dysku, a na nośnik trafia sam wynik.
         // Zapisów na kość pamięci jest wtedy o połowę mniej, a rozpakowywanie
         // nakłada się w czasie z pobieraniem kolejnych archiwów.
+        // Po udanym pobraniu archiwa nie są już do niczego potrzebne.
+        let cleanup = (!self.direct_to_medium).then(work_directory);
+
         let (downloader, mut progress_rx) = if self.direct_to_medium {
             Downloader::new(out_dir, client, car, firmware, CONCURRENCY, RETRIES, false)
         } else {
@@ -715,16 +792,40 @@ impl Worker {
                 }
             };
 
+            let succeeded = result.is_ok();
+
             let message = match result {
                 Ok(()) => "Pobieranie zakończone. Sumy kontrolne sprawdzone.".to_owned(),
                 Err(e) => format!("Pobieranie nie powiodło się: {e}"),
             };
-            let is_error = message.starts_with("Pobieranie nie");
+
+            // Sprzątamy tylko po powodzeniu — po błędzie archiwa są tym, co
+            // pozwoli wznowić bez ściągania wszystkiego od nowa.
+            let mut leftovers = String::new();
+            if let Some(work) = &cleanup {
+                if succeeded {
+                    match std::fs::remove_dir_all(work) {
+                        Ok(()) => tracing::info!("Usunięto archiwa z {}", work.display()),
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(e) => tracing::warn!("Nie udało się usunąć archiwów: {e}"),
+                    }
+                } else {
+                    let size = directory_size(work);
+                    if size > 0 {
+                        leftovers = format_size(size);
+                    }
+                }
+            }
 
             let _ = ui.upgrade_in_event_loop(move |ui| {
                 ui.set_downloading(false);
                 ui.set_status(message.into());
-                ui.set_status_is_error(is_error);
+                ui.set_status_is_error(!succeeded);
+                ui.set_leftovers(leftovers.into());
+
+                if succeeded {
+                    ui.set_target_has_current(true);
+                }
             });
         }));
 
@@ -782,6 +883,7 @@ impl Worker {
                     self.push_space_note();
                     self.push_media_rows();
                 }
+                Cmd::ClearCache => self.clear_cache(),
                 Cmd::GoToMedia => {
                     let summary = match (&self.selected, self.required_bytes()) {
                         (Some(i), needed) if needed > 0 => format!(
@@ -798,6 +900,8 @@ impl Worker {
                         ui.set_page(1);
                     });
                     self.push_space_note();
+                    self.push_target_state();
+                    self.push_leftovers();
                     self.refresh_media().await;
                 }
                 Cmd::GoBack => self.with_ui(|ui| ui.set_page(0)),
@@ -864,6 +968,9 @@ fn main() -> Result<()> {
 
         if stage == "nosnik" {
             let _ = tx.send(Cmd::GoToMedia);
+            // Polecenia są przetwarzane po kolei, a GoToMedia czeka na
+            // wykrycie nośników, więc lista jest już gotowa.
+            let _ = tx.send(Cmd::SelectMedium(0));
         }
     }
 
@@ -948,7 +1055,12 @@ fn wire_callbacks(ui: &AppWindow, tx: UnboundedSender<Cmd>) {
         let _ = t.send(Cmd::CancelFormat);
     });
 
+    let t = tx.clone();
     ui.on_set_direct_mode(move |direct| {
-        let _ = tx.send(Cmd::SetDirectMode(direct));
+        let _ = t.send(Cmd::SetDirectMode(direct));
+    });
+
+    ui.on_clear_cache(move || {
+        let _ = tx.send(Cmd::ClearCache);
     });
 }

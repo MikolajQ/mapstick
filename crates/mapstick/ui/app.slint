@@ -56,6 +56,8 @@ export component AppWindow inherits Window {
 
     in property <bool> direct-to-medium: false;
     in property <string> space-note;
+    in property <bool> target-has-current: false;
+    in property <string> leftovers;
     in property <bool> space-warning: false;
 
     in property <string> output-dir;
@@ -82,6 +84,7 @@ export component AppWindow inherits Window {
     callback start-download();
     callback cancel-download();
     callback set-direct-mode(bool);
+    callback clear-cache();
 
     VerticalBox {
         padding: 16px;
@@ -354,7 +357,7 @@ export component AppWindow inherits Window {
             }
 
             Rectangle {
-                height: 168px;
+                height: 206px;
                 border-width: 1px;
                 border-color: #8884;
                 border-radius: 4px;
@@ -402,12 +405,34 @@ export component AppWindow inherits Window {
                         if !root.downloading: Button {
                             text: "Pobierz";
                             primary: true;
-                            enabled: root.output-dir != "" && !root.formatting;
+                            enabled: root.output-dir != "" && !root.formatting
+                                && !root.target-has-current;
                             clicked => { root.start-download(); }
                         }
                         if root.downloading: Button {
                             text: "Anuluj";
                             clicked => { root.cancel-download(); }
+                        }
+                    }
+
+                    if root.target-has-current && !root.downloading: Text {
+                        text: "We wskazanym miejscu leży już bieżąca wersja — nie ma czego pobierać.";
+                        font-size: 12px;
+                        color: #4a9d5f;
+                    }
+
+                    if root.leftovers != "" && !root.downloading: HorizontalLayout {
+                        spacing: 10px;
+                        Text {
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                            text: "Pozostałości archiwów na dysku: " + root.leftovers;
+                            font-size: 12px;
+                            opacity: 0.75;
+                        }
+                        Button {
+                            text: "Wyczyść";
+                            clicked => { root.clear-cache(); }
                         }
                     }
 
