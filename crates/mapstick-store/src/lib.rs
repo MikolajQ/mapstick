@@ -53,6 +53,9 @@ pub struct Favourite {
     pub latest_seen_version: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub latest_checked_at: Option<String>,
+    /// Data wydania najnowszej wersji, tak jak podaje ją serwis (np. `2026.07`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_released: Option<String>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub downloaded_version: Option<String>,
@@ -207,6 +210,7 @@ mod tests {
             model_name: "New IONIQ 5".to_owned(),
             latest_seen_version: None,
             latest_checked_at: None,
+            latest_released: None,
             downloaded_version: None,
             downloaded_at: None,
             installed_version: None,

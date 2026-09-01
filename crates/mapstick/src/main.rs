@@ -313,7 +313,12 @@ impl Worker {
                 // wiemy — najnowsze dostępne, wyraźnie opisane.
                 let version = match (&f.installed_version, &f.latest_seen_version) {
                     (Some(v), _) => v.clone(),
-                    (None, Some(v)) => format!("dostępna: {v}"),
+                    (None, Some(v)) => match &f.latest_released {
+                        // Data idzie przed wersją, bo przy wąskiej kolumnie to
+                        // wersja zostanie skrócona, a nie ona.
+                        Some(released) => format!("dostępna {released}: {v}"),
+                        None => format!("dostępna: {v}"),
+                    },
                     (None, None) => "—".to_owned(),
                 };
 
@@ -367,6 +372,8 @@ impl Worker {
                 model_name: car.model.clone(),
                 latest_seen_version: car.versions.first().cloned(),
                 latest_checked_at: Some(mapstick_store::now()),
+                latest_released: Some(self.entries[index].released.clone())
+                    .filter(|r| !r.is_empty()),
                 downloaded_version: None,
                 downloaded_at: None,
                 installed_version: None,
@@ -375,11 +382,39 @@ impl Worker {
                 vin: None,
             });
             self.set_status(format!("{} dodany do ulubionych.", car.name), false);
+
+            // Świeży wpis nie wie nic o wersji w aucie. Jeśli akurat jest
+            // podłączony nośnik z tym firmware'em, uzupełniamy ją od razu,
+            // zamiast czekać na wejście w widok nośnika.
+            self.learn_installed_from_media();
         }
 
         self.save_store();
         self.push_favourites();
         self.push_selected_favourite_state();
+    }
+
+    /// Przepisuje najnowsze wersje i daty wydania do pasujących ulubionych.
+    fn update_favourites_from(&mut self, entries: &[Entry]) -> bool {
+        let mut changed = false;
+
+        for entry in entries {
+            let Some(favourite) = self.store.get_mut(&entry.car.id) else {
+                continue;
+            };
+
+            favourite.latest_seen_version = entry.car.versions.first().cloned();
+            favourite.latest_released = Some(entry.released.clone()).filter(|r| !r.is_empty());
+            favourite.latest_checked_at = Some(mapstick_store::now());
+            changed = true;
+        }
+
+        if changed {
+            self.save_store();
+            self.push_favourites();
+        }
+
+        changed
     }
 
     /// Odświeża wersje wszystkich ulubionych — po jednym zapytaniu na
@@ -397,54 +432,25 @@ impl Worker {
         for (brand, region) in combos {
             let code = BRANDS[brand_index(&brand)].as_code_str();
 
-            let cars = match self.fetch_cars(code, &region).await {
-                Ok(cars) => cars,
-                Err(e) => {
-                    tracing::warn!("Nie udało się sprawdzić {brand}/{region}: {e}");
-                    continue;
+            match self.fetch_entries(code, &region).await {
+                Ok(entries) => {
+                    self.update_favourites_from(&entries);
                 }
-            };
-
-            for car in &cars {
-                if let Some(favourite) = self.store.get_mut(&car.id) {
-                    favourite.latest_seen_version = car.versions.first().cloned();
-                    favourite.latest_checked_at = Some(mapstick_store::now());
-                }
+                Err(e) => tracing::warn!("Nie udało się sprawdzić {brand}/{region}: {e}"),
             }
         }
-
-        self.save_store();
-        self.push_favourites();
     }
 
-    async fn fetch_cars(&self, brand_code: &str, region: &str) -> Result<Vec<CarInfo>> {
+    /// Pobiera katalog modeli w postaci surowej i przerabia na [`Entry`].
+    ///
+    /// Surowa odpowiedź niesie `mediaType` i `releaseDate`, których nie ma
+    /// w znormalizowanym `CarInfo` — inaczej trzeba by o te same dane pytać
+    /// serwis dwa razy.
+    async fn fetch_entries(&self, brand_code: &str, region: &str) -> Result<Vec<Entry>> {
         let client = self.client().await?;
         client.validate_region(brand_code, region).await?;
         let guid = client.get_guid(region).await?;
-
-        Ok(client.get_cars(region, &guid, brand_code).await?)
-    }
-
-    async fn client(&self) -> Result<NuClient> {
-        Ok(NuClientBuilder::new().build()?)
-    }
-
-    async fn load_models(&mut self, brand: usize, region: usize) -> Result<()> {
-        self.brand = *BRANDS
-            .get(brand)
-            .ok_or_else(|| anyhow!("Nieznana marka o indeksie {brand}"))?;
-        self.region = REGIONS
-            .get(region)
-            .ok_or_else(|| anyhow!("Nieznany region o indeksie {region}"))?
-            .0
-            .to_owned();
-
-        let code = self.brand.as_code_str();
-        let client = self.client().await?;
-
-        client.validate_region(code, &self.region).await?;
-        let guid = client.get_guid(&self.region).await?;
-        let raw = client.get_cars_raw(&self.region, &guid, code).await?;
+        let raw = client.get_cars_raw(region, &guid, brand_code).await?;
 
         let mut entries = Vec::with_capacity(raw.cars.len());
         for car in raw.cars {
@@ -462,6 +468,30 @@ impl Worker {
                 Err(e) => tracing::warn!("Pomijam pojazd o nieoczekiwanych danych: {e}"),
             }
         }
+
+        Ok(entries)
+    }
+
+    async fn client(&self) -> Result<NuClient> {
+        Ok(NuClientBuilder::new().build()?)
+    }
+
+    async fn load_models(&mut self, brand: usize, region: usize) -> Result<()> {
+        self.brand = *BRANDS
+            .get(brand)
+            .ok_or_else(|| anyhow!("Nieznana marka o indeksie {brand}"))?;
+        self.region = REGIONS
+            .get(region)
+            .ok_or_else(|| anyhow!("Nieznany region o indeksie {region}"))?
+            .0
+            .to_owned();
+
+        let code = self.brand.as_code_str();
+        let entries = self.fetch_entries(code, &self.region).await?;
+
+        // Lista i tak przyszła — przy okazji odświeżamy ulubione z tej marki
+        // i regionu, bez dodatkowego zapytania.
+        self.update_favourites_from(&entries);
 
         let count = entries.len();
         self.entries = entries;
