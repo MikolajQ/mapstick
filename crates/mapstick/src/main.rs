@@ -352,16 +352,47 @@ impl Worker {
     fn push_media_rows(&self) {
         let needed = self.required_bytes();
 
+        // Wersja, którą użytkownik zamierza wgrać — do porównania z tym, co
+        // już leży na nośniku.
+        let target = self
+            .selected
+            .map(|i| (&self.entries[i].car.id, &self.entries[i].car.versions));
+
         let rows: Vec<MediumRow> = self
             .media
             .iter()
             .map(|m| {
-                let (status, usable) = match () {
-                    _ if m.mount_point.is_none() => ("niezamontowany", false),
-                    _ if !m.is_exfat() => ("wymaga exFAT", false),
-                    _ if needed > 0 && !m.fits(needed) => ("za mało miejsca", false),
-                    _ => ("gotowy", true),
+                // Plik .ver mówi, co użytkownik ostatnio wgrywał tym nośnikiem
+                // — czyli najpewniejsze źródło wersji siedzącej w aucie.
+                let found = m
+                    .mount_point
+                    .as_deref()
+                    .and_then(|p| mapstick_media::read_installed(p).ok().flatten());
+
+                let same_version = match (&found, target) {
+                    (Some(f), Some((id, versions))) => {
+                        f.model_id == *id && versions.contains(&f.firmware_version)
+                    }
+                    _ => false,
                 };
+                let other_version = found.is_some() && !same_version && target.is_some();
+
+                let (status, usable) = match () {
+                    _ if m.mount_point.is_none() => ("niezamontowany".to_owned(), false),
+                    _ if !m.is_exfat() => ("wymaga exFAT".to_owned(), false),
+                    // Ta sama wersja: nudl pominie wszystkie pliki, więc
+                    // pobieranie skończy się natychmiast i niczego nie zmieni.
+                    _ if same_version => ("ta wersja już tu jest".to_owned(), true),
+                    _ if needed > 0 && !m.fits(needed) => ("za mało miejsca".to_owned(), false),
+                    // Nazwy plików niosą numer wersji, więc stary komplet nie
+                    // zostanie nadpisany ani usunięty — zostanie obok nowego.
+                    _ if other_version => ("inna wersja — zalecane formatowanie".to_owned(), false),
+                    _ => ("gotowy".to_owned(), true),
+                };
+
+                let installed = found
+                    .map(|i| format!("{} {}", i.model_id, i.firmware_version))
+                    .unwrap_or_default();
 
                 let details = format!(
                     "{} · wolne {} z {}{}",
@@ -374,20 +405,13 @@ impl Worker {
                         .unwrap_or_default(),
                 );
 
-                // Plik .ver mówi, co użytkownik ostatnio wgrywał tym nośnikiem
-                // — czyli najpewniejsze źródło wersji siedzącej w aucie.
-                let installed = m
-                    .mount_point
-                    .as_deref()
-                    .and_then(|p| mapstick_media::read_installed(p).ok().flatten())
-                    .map(|i| format!("{} {}", i.model_id, i.firmware_version))
-                    .unwrap_or_default();
+                tracing::info!("{}: {status}", m.id);
 
                 MediumRow {
                     id: m.id.as_str().into(),
                     label: m.label.as_str().into(),
                     details: details.into(),
-                    status: status.into(),
+                    status: status.as_str().into(),
                     usable,
                     installed: installed.into(),
                 }
@@ -730,7 +754,12 @@ fn main() -> Result<()> {
             brand: 0,
             region: 0,
         });
-        let _ = tx.send(Cmd::Select(1));
+
+        if let Ok(filter) = std::env::var("MAPSTICK_DEV_MODEL") {
+            let _ = tx.send(Cmd::Filter(filter));
+        }
+
+        let _ = tx.send(Cmd::Select(0));
 
         if stage == "nosnik" {
             let _ = tx.send(Cmd::GoToMedia);
