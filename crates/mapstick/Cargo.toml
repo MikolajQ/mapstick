@@ -11,6 +11,7 @@ rust-version.workspace = true
 [dependencies]
 anyhow = "1.0.80"
 cap-std = "4.0.0"
+mapstick-media = { path = "../mapstick-media" }
 nudl = { path = "../../../nudl" }
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
 rustls = { version = "0.23.36", features = ["ring"], default-features = false }

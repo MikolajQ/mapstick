@@ -40,6 +40,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             m.total_bytes, m.free_bytes
         );
         println!("  zmieści 25 GiB? {}", m.fits(27_377_719_742));
+
+        if let Some(mount) = &m.mount_point {
+            match mapstick_media::read_installed(mount) {
+                Ok(Some(i)) => println!(
+                    "  znaleziony firmware: {} {} (marka {})",
+                    i.model_id, i.firmware_version, i.brand
+                ),
+                Ok(None) => println!("  znaleziony firmware: brak pliku .ver"),
+                Err(e) => println!("  znaleziony firmware: błąd odczytu — {e}"),
+            }
+        }
     }
 
     Ok(())

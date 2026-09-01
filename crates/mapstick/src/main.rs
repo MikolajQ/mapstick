@@ -7,6 +7,7 @@ use std::{path::PathBuf, time::Duration};
 
 use anyhow::{Result, anyhow};
 use cap_std::{ambient_authority, fs::Dir};
+use mapstick_media::Medium;
 use nudl::{
     cli::Brand,
     client::{CarInfo, FirmwareInfo, NuClient, NuClientBuilder},
@@ -53,6 +54,13 @@ enum Cmd {
     PickOutputDir,
     StartDownload,
     Cancel,
+    GoToMedia,
+    GoBack,
+    RefreshMedia,
+    SelectMedium(usize),
+    RequestFormat(usize),
+    ConfirmFormat,
+    CancelFormat,
 }
 
 /// Wiersz listy wzbogacony o dane, których nie ma w znormalizowanym `CarInfo`.
@@ -138,6 +146,8 @@ struct Worker {
     firmware: Option<FirmwareInfo>,
     output_dir: Option<PathBuf>,
     download: Option<JoinHandle<()>>,
+    media: Vec<Medium>,
+    pending_format: Option<usize>,
 }
 
 impl Worker {
@@ -153,6 +163,8 @@ impl Worker {
             firmware: None,
             output_dir: None,
             download: None,
+            media: Vec::new(),
+            pending_format: None,
         }
     }
 
@@ -163,6 +175,13 @@ impl Worker {
 
     fn set_status(&self, text: impl Into<String>, is_error: bool) {
         let text = text.into();
+
+        if is_error {
+            tracing::warn!("{text}");
+        } else {
+            tracing::info!("{text}");
+        }
+
         self.with_ui(move |ui| {
             ui.set_status(text.into());
             ui.set_status_is_error(is_error);
@@ -322,6 +341,168 @@ impl Worker {
         Ok(())
     }
 
+    /// Ile miejsca trzeba na nośniku dla wybranego modelu.
+    fn required_bytes(&self) -> u64 {
+        self.firmware
+            .as_ref()
+            .map(|f| firmware_totals(f).1)
+            .unwrap_or(0)
+    }
+
+    fn push_media_rows(&self) {
+        let needed = self.required_bytes();
+
+        let rows: Vec<MediumRow> = self
+            .media
+            .iter()
+            .map(|m| {
+                let (status, usable) = match () {
+                    _ if m.mount_point.is_none() => ("niezamontowany", false),
+                    _ if !m.is_exfat() => ("wymaga exFAT", false),
+                    _ if needed > 0 && !m.fits(needed) => ("za mało miejsca", false),
+                    _ => ("gotowy", true),
+                };
+
+                let details = format!(
+                    "{} · wolne {} z {}{}",
+                    m.filesystem.as_deref().unwrap_or("brak systemu plików"),
+                    format_size(m.free_bytes),
+                    format_size(m.total_bytes),
+                    m.connection
+                        .as_deref()
+                        .map(|c| format!(" · {c}"))
+                        .unwrap_or_default(),
+                );
+
+                // Plik .ver mówi, co użytkownik ostatnio wgrywał tym nośnikiem
+                // — czyli najpewniejsze źródło wersji siedzącej w aucie.
+                let installed = m
+                    .mount_point
+                    .as_deref()
+                    .and_then(|p| mapstick_media::read_installed(p).ok().flatten())
+                    .map(|i| format!("{} {}", i.model_id, i.firmware_version))
+                    .unwrap_or_default();
+
+                MediumRow {
+                    id: m.id.as_str().into(),
+                    label: m.label.as_str().into(),
+                    details: details.into(),
+                    status: status.into(),
+                    usable,
+                    installed: installed.into(),
+                }
+            })
+            .collect();
+
+        self.with_ui(move |ui| {
+            ui.set_media(ModelRc::new(VecModel::from(rows)));
+            ui.set_selected_medium(-1);
+        });
+    }
+
+    async fn refresh_media(&mut self) {
+        self.with_ui(|ui| ui.set_media_busy(true));
+
+        match mapstick_media::list_media().await {
+            Ok(media) => {
+                let count = media.len();
+                self.media = media;
+                self.push_media_rows();
+
+                if count == 0 {
+                    self.set_status(
+                        "Nie znaleziono nośnika wymiennego. Dyski wewnętrzne i systemowe są pomijane.",
+                        false,
+                    );
+                } else {
+                    self.set_status(format!("Znaleziono nośników: {count}."), false);
+                }
+            }
+            Err(e) => {
+                self.media.clear();
+                self.push_media_rows();
+                self.set_status(format!("Nie udało się wykryć nośników: {e}"), true);
+            }
+        }
+
+        self.with_ui(|ui| ui.set_media_busy(false));
+    }
+
+    fn select_medium(&mut self, index: usize) {
+        let Some(medium) = self.media.get(index) else {
+            return;
+        };
+        let Some(mount) = medium.mount_point.clone() else {
+            self.set_status(
+                "Ten nośnik nie jest zamontowany — podłącz go ponownie albo zamontuj.",
+                true,
+            );
+            return;
+        };
+
+        let shown = mount.display().to_string();
+        self.output_dir = Some(mount);
+        let visible = index as i32;
+
+        self.with_ui(move |ui| {
+            ui.set_selected_medium(visible);
+            ui.set_output_dir(shown.into());
+        });
+    }
+
+    fn request_format(&mut self, index: usize) {
+        let Some(medium) = self.media.get(index) else {
+            return;
+        };
+
+        // Potwierdzenie pokazuje to, po czym człowiek rozpozna, że wskazał nie
+        // ten nośnik: nazwę napędu, pojemność i ścieżkę urządzenia.
+        let target = format!(
+            "{}\n{}  ·  {}{}",
+            medium.label,
+            medium.id,
+            format_size(medium.total_bytes),
+            medium
+                .mount_point
+                .as_ref()
+                .map(|p| format!("  ·  {}", p.display()))
+                .unwrap_or_default(),
+        );
+
+        self.pending_format = Some(index);
+        self.with_ui(move |ui| {
+            ui.set_format_target(target.into());
+            ui.set_format_dialog(true);
+        });
+    }
+
+    async fn confirm_format(&mut self) {
+        let Some(index) = self.pending_format.take() else {
+            return;
+        };
+        let Some(medium) = self.media.get(index).cloned() else {
+            return;
+        };
+
+        self.with_ui(|ui| ui.set_formatting(true));
+        self.set_status(format!("Formatowanie {} do exFAT…", medium.id), false);
+
+        let result = mapstick_media::format_exfat(&medium, "MAPSTICK").await;
+
+        self.with_ui(|ui| {
+            ui.set_formatting(false);
+            ui.set_format_dialog(false);
+        });
+
+        match result {
+            Ok(()) => {
+                self.set_status(format!("{} sformatowany do exFAT.", medium.id), false);
+                self.refresh_media().await;
+            }
+            Err(e) => self.set_status(format!("Formatowanie nie powiodło się: {e}"), true),
+        }
+    }
+
     async fn pick_output_dir(&mut self) {
         let Some(dir) = rfd::AsyncFileDialog::new()
             .set_title("Katalog docelowy")
@@ -339,7 +520,7 @@ impl Worker {
     }
 
     fn start_download(&mut self) -> Result<()> {
-        let (Some(index), Some(firmware)) = (self.selected, self.firmware.take()) else {
+        let (Some(index), Some(firmware)) = (self.selected, self.firmware.clone()) else {
             return Err(anyhow!("Najpierw wybierz model i poczekaj na rozmiar."));
         };
         let output = self
@@ -481,6 +662,32 @@ impl Worker {
                     }
                 }
                 Cmd::Cancel => self.cancel(),
+                Cmd::GoToMedia => {
+                    let summary = match (&self.selected, self.required_bytes()) {
+                        (Some(i), needed) if needed > 0 => format!(
+                            "{} — do zapisania {}",
+                            self.entries[*i].car.name,
+                            format_size(needed)
+                        ),
+                        (Some(i), _) => format!("{} — rozmiar nieznany", self.entries[*i].car.name),
+                        _ => "Nie wybrano modelu".to_owned(),
+                    };
+
+                    self.with_ui(move |ui| {
+                        ui.set_target_summary(summary.into());
+                        ui.set_page(1);
+                    });
+                    self.refresh_media().await;
+                }
+                Cmd::GoBack => self.with_ui(|ui| ui.set_page(0)),
+                Cmd::RefreshMedia => self.refresh_media().await,
+                Cmd::SelectMedium(i) => self.select_medium(i),
+                Cmd::RequestFormat(i) => self.request_format(i),
+                Cmd::ConfirmFormat => self.confirm_format().await,
+                Cmd::CancelFormat => {
+                    self.pending_format = None;
+                    self.with_ui(|ui| ui.set_format_dialog(false));
+                }
             }
         }
     }
@@ -515,6 +722,20 @@ fn main() -> Result<()> {
 
             runtime.block_on(Worker::new(weak).run(rx));
         })?;
+
+    // Pomoc dla testów na maszynie bez sterowania myszą: MAPSTICK_DEV=lista
+    // wczytuje modele, MAPSTICK_DEV=nosnik dodatkowo wchodzi w widok nośnika.
+    if let Ok(stage @ ("lista" | "nosnik")) = std::env::var("MAPSTICK_DEV").as_deref() {
+        let _ = tx.send(Cmd::LoadModels {
+            brand: 0,
+            region: 0,
+        });
+        let _ = tx.send(Cmd::Select(1));
+
+        if stage == "nosnik" {
+            let _ = tx.send(Cmd::GoToMedia);
+        }
+    }
 
     wire_callbacks(&ui, tx);
 
@@ -553,7 +774,46 @@ fn wire_callbacks(ui: &AppWindow, tx: UnboundedSender<Cmd>) {
         let _ = t.send(Cmd::StartDownload);
     });
 
+    let t = tx.clone();
     ui.on_cancel_download(move || {
-        let _ = tx.send(Cmd::Cancel);
+        let _ = t.send(Cmd::Cancel);
+    });
+
+    let t = tx.clone();
+    ui.on_go_to_media(move || {
+        let _ = t.send(Cmd::GoToMedia);
+    });
+
+    let t = tx.clone();
+    ui.on_go_back(move || {
+        let _ = t.send(Cmd::GoBack);
+    });
+
+    let t = tx.clone();
+    ui.on_refresh_media(move || {
+        let _ = t.send(Cmd::RefreshMedia);
+    });
+
+    let t = tx.clone();
+    ui.on_select_medium(move |index| {
+        if index >= 0 {
+            let _ = t.send(Cmd::SelectMedium(index as usize));
+        }
+    });
+
+    let t = tx.clone();
+    ui.on_request_format(move |index| {
+        if index >= 0 {
+            let _ = t.send(Cmd::RequestFormat(index as usize));
+        }
+    });
+
+    let t = tx.clone();
+    ui.on_confirm_format(move || {
+        let _ = t.send(Cmd::ConfirmFormat);
+    });
+
+    ui.on_cancel_format(move || {
+        let _ = tx.send(Cmd::CancelFormat);
     });
 }

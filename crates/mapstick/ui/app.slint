@@ -1,6 +1,5 @@
 import {
-    Button, ComboBox, GroupBox, HorizontalBox, LineEdit, ListView,
-    ProgressIndicator, ScrollView, VerticalBox,
+    Button, ComboBox, HorizontalBox, LineEdit, ListView, ProgressIndicator, VerticalBox,
 } from "std-widgets.slint";
 
 export struct ModelRow {
@@ -11,21 +10,33 @@ export struct ModelRow {
     released: string,
 }
 
+export struct MediumRow {
+    id: string,
+    label: string,
+    details: string,
+    status: string,
+    usable: bool,
+    installed: string,
+}
+
 export component AppWindow inherits Window {
     title: "MapStick";
     min-width: 900px;
-    min-height: 620px;
+    min-height: 640px;
     preferred-width: 1080px;
-    preferred-height: 720px;
+    preferred-height: 740px;
 
-    // --- wejście z Rusta ---
+    // --- wspólne ---
+    in property <int> page: 0;
+    in property <string> status;
+    in property <bool> status-is-error: false;
+
+    // --- widok listy modeli ---
     in property <[string]> brands: ["Hyundai", "Kia", "Genesis"];
     in property <[string]> regions;
     in property <[ModelRow]> models;
     in property <int> total-count;
     in property <bool> busy: false;
-    in property <string> status;
-    in property <bool> status-is-error: false;
 
     in property <int> selected-index: -1;
     in property <string> detail-name;
@@ -36,16 +47,33 @@ export component AppWindow inherits Window {
     in property <string> detail-size: "—";
     in property <bool> detail-ready: false;
 
+    // --- widok nośnika ---
+    in property <[MediumRow]> media;
+    in property <bool> media-busy: false;
+    in property <int> selected-medium: -1;
+    in property <string> target-summary;
+
     in property <string> output-dir;
     in property <bool> downloading: false;
     in property <float> progress: 0;
     in property <string> progress-text;
 
-    // --- wyjście do Rusta ---
+    // --- potwierdzenie formatowania ---
+    in property <bool> format-dialog: false;
+    in property <string> format-target;
+    in property <bool> formatting: false;
+
     callback load-models(int, int);
     callback filter-changed(string);
     callback select-row(int);
+    callback go-to-media();
+    callback go-back();
+    callback refresh-media();
+    callback select-medium(int);
     callback pick-output-dir();
+    callback request-format(int);
+    callback confirm-format();
+    callback cancel-format();
     callback start-download();
     callback cancel-download();
 
@@ -53,190 +81,304 @@ export component AppWindow inherits Window {
         padding: 16px;
         spacing: 14px;
 
-        // ---------- wybór marki i regionu ----------
-        HorizontalBox {
-            spacing: 10px;
-            alignment: start;
+        // ================= WIDOK 1: MODELE =================
+        if root.page == 0: VerticalLayout {
+            spacing: 14px;
 
-            VerticalLayout {
-                spacing: 4px;
-                Text { text: "Marka"; font-size: 12px; opacity: 0.7; }
-                brand-box := ComboBox {
-                    width: 150px;
-                    model: root.brands;
-                    current-index: 0;
-                }
-            }
+            HorizontalBox {
+                spacing: 10px;
+                alignment: start;
+                padding: 0px;
 
-            VerticalLayout {
-                spacing: 4px;
-                Text { text: "Region"; font-size: 12px; opacity: 0.7; }
-                region-box := ComboBox {
-                    width: 210px;
-                    model: root.regions;
-                    current-index: 0;
-                }
-            }
-
-            VerticalLayout {
-                spacing: 4px;
-                Text { text: " "; font-size: 12px; }
-                Button {
-                    text: root.busy ? "Wczytywanie…" : "Pokaż modele";
-                    primary: true;
-                    enabled: !root.busy && !root.downloading;
-                    clicked => {
-                        root.load-models(brand-box.current-index, region-box.current-index);
-                    }
-                }
-            }
-        }
-
-        // ---------- filtr ----------
-        HorizontalBox {
-            spacing: 10px;
-            padding: 0px;
-
-            LineEdit {
-                placeholder-text: "Filtruj: nazwa, ID modelu albo wersja…";
-                enabled: root.total-count > 0;
-                edited(text) => { root.filter-changed(text); }
-            }
-
-            Text {
-                vertical-alignment: center;
-                text: root.total-count > 0
-                    ? root.models.length + " z " + root.total-count
-                    : "";
-                font-size: 12px;
-                opacity: 0.7;
-            }
-        }
-
-        // ---------- tabela modeli ----------
-        Rectangle {
-            vertical-stretch: 1;
-            border-width: 1px;
-            border-color: #8884;
-            border-radius: 4px;
-            background: #8881;
-
-            VerticalLayout {
-                padding: 1px;
-
-                // nagłówek
-                Rectangle {
-                    height: 30px;
-                    background: #8882;
-                    HorizontalLayout {
-                        padding-left: 10px;
-                        padding-right: 10px;
-                        spacing: 10px;
-                        Text { width: 30%; text: "NAZWA"; font-size: 11px; font-weight: 700; vertical-alignment: center; opacity: 0.75; }
-                        Text { width: 24%; text: "ID MODELU"; font-size: 11px; font-weight: 700; vertical-alignment: center; opacity: 0.75; }
-                        Text { text: "WERSJA"; font-size: 11px; font-weight: 700; vertical-alignment: center; opacity: 0.75; }
-                        Text { width: 70px; text: "NOŚNIK"; font-size: 11px; font-weight: 700; vertical-alignment: center; opacity: 0.75; }
+                VerticalLayout {
+                    spacing: 4px;
+                    Text { text: "Marka"; font-size: 12px; opacity: 0.7; }
+                    brand-box := ComboBox {
+                        width: 150px;
+                        model: root.brands;
+                        current-index: 0;
                     }
                 }
 
-                ListView {
-                    for row[i] in root.models: Rectangle {
-                        height: 32px;
-                        background: root.selected-index == i
-                            ? #4a90d922
-                            : (touch.has-hover ? #8881 : transparent);
+                VerticalLayout {
+                    spacing: 4px;
+                    Text { text: "Region"; font-size: 12px; opacity: 0.7; }
+                    region-box := ComboBox {
+                        width: 210px;
+                        model: root.regions;
+                        current-index: 0;
+                    }
+                }
 
-                        touch := TouchArea {
-                            clicked => { root.select-row(i); }
+                VerticalLayout {
+                    spacing: 4px;
+                    Text { text: " "; font-size: 12px; }
+                    Button {
+                        text: root.busy ? "Wczytywanie…" : "Pokaż modele";
+                        primary: true;
+                        enabled: !root.busy;
+                        clicked => {
+                            root.load-models(brand-box.current-index, region-box.current-index);
                         }
+                    }
+                }
+            }
 
+            HorizontalBox {
+                spacing: 10px;
+                padding: 0px;
+
+                LineEdit {
+                    placeholder-text: "Filtruj: nazwa, ID modelu albo wersja…";
+                    enabled: root.total-count > 0;
+                    edited(text) => { root.filter-changed(text); }
+                }
+
+                Text {
+                    vertical-alignment: center;
+                    text: root.total-count > 0 ? root.models.length + " z " + root.total-count : "";
+                    font-size: 12px;
+                    opacity: 0.7;
+                }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                border-width: 1px;
+                border-color: #8884;
+                border-radius: 4px;
+                background: #8881;
+
+                VerticalLayout {
+                    padding: 1px;
+
+                    Rectangle {
+                        height: 30px;
+                        background: #8882;
                         HorizontalLayout {
                             padding-left: 10px;
                             padding-right: 10px;
                             spacing: 10px;
-                            Text { width: 30%; text: row.name; vertical-alignment: center; overflow: elide; }
-                            Text { width: 24%; text: row.id; vertical-alignment: center; overflow: elide; font-family: "monospace"; font-size: 12px; }
-                            Text { text: row.version; vertical-alignment: center; overflow: elide; font-family: "monospace"; font-size: 12px; }
-                            Text { width: 70px; text: row.media; vertical-alignment: center; font-size: 12px; opacity: 0.8; }
+                            Text { width: 30%; text: "NAZWA"; font-size: 11px; font-weight: 700; vertical-alignment: center; opacity: 0.75; }
+                            Text { width: 24%; text: "ID MODELU"; font-size: 11px; font-weight: 700; vertical-alignment: center; opacity: 0.75; }
+                            Text { text: "WERSJA"; font-size: 11px; font-weight: 700; vertical-alignment: center; opacity: 0.75; }
+                            Text { width: 70px; text: "NOŚNIK"; font-size: 11px; font-weight: 700; vertical-alignment: center; opacity: 0.75; }
+                        }
+                    }
+
+                    ListView {
+                        for row[i] in root.models: Rectangle {
+                            height: 32px;
+                            background: root.selected-index == i ? #4a90d922 : (touch.has-hover ? #8881 : transparent);
+
+                            touch := TouchArea {
+                                clicked => { root.select-row(i); }
+                            }
+
+                            HorizontalLayout {
+                                padding-left: 10px;
+                                padding-right: 10px;
+                                spacing: 10px;
+                                Text { width: 30%; text: row.name; vertical-alignment: center; overflow: elide; }
+                                Text { width: 24%; text: row.id; vertical-alignment: center; overflow: elide; font-family: "monospace"; font-size: 12px; }
+                                Text { text: row.version; vertical-alignment: center; overflow: elide; font-family: "monospace"; font-size: 12px; }
+                                Text { width: 70px; text: row.media; vertical-alignment: center; font-size: 12px; opacity: 0.8; }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                height: 116px;
+                border-width: 1px;
+                border-color: #8884;
+                border-radius: 4px;
+                background: #8881;
+
+                VerticalLayout {
+                    padding: 12px;
+                    spacing: 8px;
+
+                    if !root.detail-ready: Text {
+                        text: "Wybierz model z listy, żeby zobaczyć rozmiar i przygotować nośnik.";
+                        vertical-alignment: center;
+                        horizontal-alignment: center;
+                        opacity: 0.6;
+                    }
+
+                    if root.detail-ready: VerticalLayout {
+                        spacing: 6px;
+
+                        HorizontalLayout {
+                            spacing: 16px;
+                            Text { text: root.detail-name; font-size: 17px; font-weight: 700; overflow: elide; }
+                            Text {
+                                vertical-alignment: center;
+                                text: root.detail-id;
+                                font-family: "monospace";
+                                font-size: 12px;
+                                opacity: 0.7;
+                            }
+                        }
+
+                        Text {
+                            text: root.detail-version + "   ·   nośnik " + root.detail-media
+                                + (root.detail-released == "" ? "" : "   ·   ostatnie dostępne wydanie " + root.detail-released);
+                            font-size: 12px;
+                            opacity: 0.8;
+                            overflow: elide;
+                        }
+
+                        HorizontalLayout {
+                            spacing: 10px;
+                            Text {
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
+                                text: root.detail-size;
+                                font-size: 13px;
+                            }
+                            Button {
+                                text: "Przygotuj nośnik →";
+                                primary: true;
+                                clicked => { root.go-to-media(); }
+                            }
                         }
                     }
                 }
             }
         }
 
-        // ---------- szczegóły i pobieranie ----------
-        Rectangle {
-            height: 148px;
-            border-width: 1px;
-            border-color: #8884;
-            border-radius: 4px;
-            background: #8881;
+        // ================= WIDOK 2: NOŚNIK =================
+        if root.page == 1: VerticalLayout {
+            spacing: 12px;
 
-            VerticalLayout {
-                padding: 12px;
-                spacing: 8px;
-
-                if !root.detail-ready: Text {
-                    text: "Wybierz model z listy, żeby zobaczyć rozmiar i pobrać oprogramowanie.";
+            HorizontalBox {
+                padding: 0px;
+                spacing: 12px;
+                Button {
+                    text: "← Wróć do listy";
+                    enabled: !root.downloading && !root.formatting;
+                    clicked => { root.go-back(); }
+                }
+                Text {
                     vertical-alignment: center;
-                    horizontal-alignment: center;
-                    opacity: 0.6;
+                    horizontal-stretch: 1;
+                    text: root.target-summary;
+                    font-size: 13px;
+                    overflow: elide;
+                }
+                Button {
+                    text: root.media-busy ? "Szukam…" : "Odśwież";
+                    enabled: !root.media-busy && !root.formatting;
+                    clicked => { root.refresh-media(); }
+                }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                border-width: 1px;
+                border-color: #8884;
+                border-radius: 4px;
+                background: #8881;
+
+                if root.media.length == 0: VerticalLayout {
+                    padding: 24px;
+                    spacing: 8px;
+                    alignment: center;
+                    Text {
+                        horizontal-alignment: center;
+                        text: root.media-busy ? "Szukam nośników…" : "Nie znaleziono nośnika wymiennego.";
+                        opacity: 0.7;
+                    }
+                    Text {
+                        horizontal-alignment: center;
+                        text: "Podłącz pendrive i naciśnij „Odśwież”. Dyski wewnętrzne oraz te,\nna których leży system, są celowo pomijane.";
+                        font-size: 12px;
+                        opacity: 0.55;
+                    }
                 }
 
-                if root.detail-ready: VerticalLayout {
+                if root.media.length > 0: ListView {
+                    for m[i] in root.media: Rectangle {
+                        height: 74px;
+                        background: root.selected-medium == i ? #4a90d922 : (mtouch.has-hover ? #8881 : transparent);
+
+                        mtouch := TouchArea {
+                            clicked => { root.select-medium(i); }
+                        }
+
+                        HorizontalLayout {
+                            padding: 12px;
+                            spacing: 12px;
+
+                            VerticalLayout {
+                                spacing: 3px;
+                                horizontal-stretch: 1;
+                                Text { text: m.label; font-weight: 700; overflow: elide; }
+                                Text { text: m.details; font-size: 12px; opacity: 0.75; overflow: elide; }
+                                Text {
+                                    text: m.installed == "" ? m.id : m.id + "   ·   znaleziono: " + m.installed;
+                                    font-size: 11px;
+                                    font-family: "monospace";
+                                    opacity: 0.6;
+                                    overflow: elide;
+                                }
+                            }
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 6px;
+                                Text {
+                                    horizontal-alignment: right;
+                                    text: m.status;
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    color: m.usable ? #4a9d5f : #c07830;
+                                }
+                                Button {
+                                    text: "Formatuj do exFAT";
+                                    enabled: !root.downloading && !root.formatting;
+                                    clicked => { root.request-format(i); }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                height: 128px;
+                border-width: 1px;
+                border-color: #8884;
+                border-radius: 4px;
+                background: #8881;
+
+                VerticalLayout {
+                    padding: 12px;
                     spacing: 8px;
 
                     HorizontalLayout {
-                        spacing: 16px;
-                        Text {
-                            text: root.detail-name;
-                            font-size: 17px;
-                            font-weight: 700;
-                            overflow: elide;
-                        }
-                        Text {
-                            vertical-alignment: center;
-                            text: root.detail-id;
-                            font-family: "monospace";
-                            font-size: 12px;
-                            opacity: 0.7;
-                        }
-                    }
-
-                    Text {
-                        text: root.detail-version + "   ·   nośnik " + root.detail-media
-                            + (root.detail-released == "" ? "" : "   ·   ostatnie dostępne wydanie " + root.detail-released)
-                            + "   ·   " + root.detail-size;
-                        font-size: 12px;
-                        opacity: 0.8;
-                        overflow: elide;
-                    }
-
-                    HorizontalLayout {
                         spacing: 8px;
-
                         Button {
-                            text: "Katalog docelowy…";
+                            text: "Inny katalog…";
                             enabled: !root.downloading;
                             clicked => { root.pick-output-dir(); }
                         }
-
                         Text {
                             vertical-alignment: center;
                             horizontal-stretch: 1;
-                            text: root.output-dir == "" ? "nie wybrano" : root.output-dir;
+                            text: root.output-dir == "" ? "nie wybrano celu" : root.output-dir;
                             font-size: 12px;
                             opacity: root.output-dir == "" ? 0.5 : 0.85;
                             overflow: elide;
                         }
-
                         if !root.downloading: Button {
                             text: "Pobierz";
                             primary: true;
-                            enabled: root.output-dir != "" && !root.busy;
+                            enabled: root.output-dir != "" && !root.formatting;
                             clicked => { root.start-download(); }
                         }
-
                         if root.downloading: Button {
                             text: "Anuluj";
                             clicked => { root.cancel-download(); }
@@ -245,26 +387,76 @@ export component AppWindow inherits Window {
 
                     if root.downloading: VerticalLayout {
                         spacing: 4px;
-                        ProgressIndicator {
-                            height: 8px;
-                            progress: root.progress;
-                        }
-                        Text {
-                            text: root.progress-text;
-                            font-size: 12px;
-                            opacity: 0.8;
-                        }
+                        ProgressIndicator { height: 8px; progress: root.progress; }
+                        Text { text: root.progress-text; font-size: 12px; opacity: 0.8; }
                     }
                 }
             }
         }
 
-        // ---------- pasek stanu ----------
         Text {
             text: root.status;
             font-size: 12px;
             color: root.status-is-error ? #d05050 : #808080;
             overflow: elide;
+        }
+    }
+
+    // ================= POTWIERDZENIE FORMATOWANIA =================
+    if root.format-dialog: Rectangle {
+        background: #000000bb;
+
+        TouchArea {}
+
+        Rectangle {
+            width: 520px;
+            height: 260px;
+            background: #2b2b2b;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: #c07830;
+
+            VerticalLayout {
+                padding: 22px;
+                spacing: 12px;
+
+                Text {
+                    text: "Skasować wszystko na tym nośniku?";
+                    font-size: 19px;
+                    font-weight: 700;
+                    color: #f0f0f0;
+                }
+
+                Text {
+                    text: root.format-target;
+                    font-size: 13px;
+                    font-family: "monospace";
+                    color: #e0c090;
+                    wrap: word-wrap;
+                }
+
+                Text {
+                    text: "Formatowanie do exFAT usuwa wszystkie dane z tego nośnika bezpowrotnie. Upewnij się, że wskazany napęd to ten, o którym myślisz.";
+                    font-size: 13px;
+                    color: #c8c8c8;
+                    wrap: word-wrap;
+                    vertical-stretch: 1;
+                }
+
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: end;
+                    Button {
+                        text: "Anuluj";
+                        clicked => { root.cancel-format(); }
+                    }
+                    Button {
+                        text: root.formatting ? "Formatuję…" : "Formatuj";
+                        enabled: !root.formatting;
+                        clicked => { root.confirm-format(); }
+                    }
+                }
+            }
         }
     }
 }
