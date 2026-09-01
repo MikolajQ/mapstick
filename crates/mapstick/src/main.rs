@@ -465,7 +465,7 @@ impl Worker {
                 format!(
                     "Nośnik musi pomieścić naraz archiwa i wynik ich rozpakowywania: ok. {}. \
                      Zapis na kość pamięci jest przez to podwojony. Używaj, jeśli masz duży \
-                     nośnik i nie masz miejsca na dysku.",
+                     nośnik i nie masz miejsca na dysku twardym.",
                     format_size(download + extracted)
                 ),
                 true,
