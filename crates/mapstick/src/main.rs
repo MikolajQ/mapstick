@@ -89,15 +89,24 @@ impl Entry {
     }
 }
 
-/// Sumaryczny rozmiar firmware'u.
+/// Ile bajtów poleci przez sieć i ile zajmie na nośniku.
 ///
-/// Serwis producenta potrafi zwrócić zero w polu zbiorczym — sprawdzone na
-/// `Bayon_EU`, gdzie `size` wynosi 0, a suma 35 plików to 25,5 GiB. Dlatego
-/// liczymy z listy plików, a pole zbiorcze traktujemy tylko jako zapasowe.
-fn firmware_total(firmware: &FirmwareInfo) -> u64 {
-    let sum: u64 = firmware.files.iter().map(|f| f.size).sum();
+/// To dwie różne liczby: pliki przychodzą spakowane, a na nośnik trafiają
+/// rozpakowane. Zbiorcze `FirmwareInfo::size` opisuje ten drugi rozmiar, ale
+/// serwis zwraca w nim zero dla każdego sprawdzonego modelu (`Bayon_EU`:
+/// pole zbiorcze 0 przy 25,5 GiB w 35 plikach), więc liczymy z listy plików,
+/// a pole zbiorcze zostawiamy jako zapasowe. Zgłoszone jako nudl#68.
+fn firmware_totals(firmware: &FirmwareInfo) -> (u64, u64) {
+    let download = firmware.files.iter().map(|f| f.download_size()).sum();
 
-    if sum > 0 { sum } else { firmware.size }
+    let extracted: u64 = firmware.files.iter().map(|f| f.size).sum();
+    let extracted = if extracted > 0 {
+        extracted
+    } else {
+        firmware.size
+    };
+
+    (download, extracted)
 }
 
 fn format_size(bytes: u64) -> String {
@@ -276,11 +285,36 @@ impl Worker {
             .get_firmware_info(&self.region, &self.entries[index].car)
             .await?;
 
-        let total = firmware_total(&firmware);
-        let size = if total > 0 {
-            format!("{} w {} plikach", format_size(total), firmware.files.len())
-        } else {
-            format!("rozmiar nieznany, plików: {}", firmware.files.len())
+        let (download, extracted) = firmware_totals(&firmware);
+        tracing::info!(
+            "{}: do pobrania {download} B, na nośniku {extracted} B, plików {}",
+            self.entries[index].car.id,
+            firmware.files.len()
+        );
+
+        // Dane map są już spakowane, więc rozmiar pobrania i rozmiar na
+        // nośniku zwykle różnią się o promile (Bayon_EU: 25,47 vs 25,50 GiB).
+        // Pokazujemy jedną liczbę, a rozbijamy ją dopiero wtedy, gdy różnica
+        // jest na tyle duża, że mogłaby zmylić przy sprawdzaniu miejsca.
+        let differ = extracted > 0 && download.abs_diff(extracted) * 50 > extracted;
+
+        let size = match (extracted, differ) {
+            (0, _) => format!(
+                "{} do pobrania · plików: {}",
+                format_size(download),
+                firmware.files.len()
+            ),
+            (_, false) => format!(
+                "{} · plików: {}",
+                format_size(extracted),
+                firmware.files.len()
+            ),
+            (_, true) => format!(
+                "{} do pobrania, {} na nośniku · plików: {}",
+                format_size(download),
+                format_size(extracted),
+                firmware.files.len()
+            ),
         };
         self.firmware = Some(firmware);
 
