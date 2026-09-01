@@ -288,7 +288,7 @@ export component AppWindow inherits Window {
             }
 
             Rectangle {
-                height: 122px;
+                height: 128px;
                 border-width: 1px;
                 border-color: #8884;
                 border-radius: 4px;
@@ -309,14 +309,47 @@ export component AppWindow inherits Window {
                         spacing: 6px;
 
                         HorizontalLayout {
-                            spacing: 16px;
-                            Text { text: root.detail-name; font-size: 17px; font-weight: 700; overflow: elide; }
+                            spacing: 10px;
+
+                            Text {
+                                text: root.detail-name;
+                                font-size: 17px;
+                                font-weight: 700;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+
+                            Rectangle {
+                                width: 30px;
+                                accessible-role: button;
+                                accessible-label: root.selected-is-favourite
+                                    ? "Usuń z ulubionych"
+                                    : "Dodaj do ulubionych";
+
+                                star-touch := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { root.toggle-favourite(); }
+                                }
+
+                                Text {
+                                    text: root.selected-is-favourite ? "★" : "☆";
+                                    font-size: 24px;
+                                    vertical-alignment: center;
+                                    horizontal-alignment: center;
+                                    color: root.selected-is-favourite
+                                        ? #e8b32a
+                                        : (star-touch.has-hover ? #e8b32a : #8c8c8c);
+                                }
+                            }
+
                             Text {
                                 vertical-alignment: center;
+                                horizontal-stretch: 1;
                                 text: root.detail-id;
                                 font-family: "monospace";
                                 font-size: 12px;
                                 opacity: 0.7;
+                                overflow: elide;
                             }
                         }
 
@@ -335,12 +368,6 @@ export component AppWindow inherits Window {
                                 horizontal-stretch: 1;
                                 text: root.detail-size;
                                 font-size: 13px;
-                            }
-                            Button {
-                                text: root.selected-is-favourite
-                                    ? "★ W ulubionych"
-                                    : "☆ Dodaj do ulubionych";
-                                clicked => { root.toggle-favourite(); }
                             }
                             Button {
                                 text: "Pobierz i przygotuj nośnik →";
