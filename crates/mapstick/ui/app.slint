@@ -1,5 +1,6 @@
 import {
-    Button, ComboBox, HorizontalBox, LineEdit, ListView, ProgressIndicator, VerticalBox,
+    Button, CheckBox, ComboBox, HorizontalBox, LineEdit, ListView, ProgressIndicator,
+    VerticalBox,
 } from "std-widgets.slint";
 
 export struct ModelRow {
@@ -53,6 +54,10 @@ export component AppWindow inherits Window {
     in property <int> selected-medium: -1;
     in property <string> target-summary;
 
+    in property <bool> direct-to-medium: false;
+    in property <string> space-note;
+    in property <bool> space-warning: false;
+
     in property <string> output-dir;
     in property <bool> downloading: false;
     in property <float> progress: 0;
@@ -76,6 +81,7 @@ export component AppWindow inherits Window {
     callback cancel-format();
     callback start-download();
     callback cancel-download();
+    callback set-direct-mode(bool);
 
     VerticalBox {
         padding: 16px;
@@ -348,7 +354,7 @@ export component AppWindow inherits Window {
             }
 
             Rectangle {
-                height: 128px;
+                height: 168px;
                 border-width: 1px;
                 border-color: #8884;
                 border-radius: 4px;
@@ -357,6 +363,26 @@ export component AppWindow inherits Window {
                 VerticalLayout {
                     padding: 12px;
                     spacing: 8px;
+
+                    HorizontalLayout {
+                        spacing: 12px;
+
+                        CheckBox {
+                            text: "Pobieraj archiwa prosto na nośnik";
+                            checked: root.direct-to-medium;
+                            enabled: !root.downloading;
+                            toggled => { root.set-direct-mode(self.checked); }
+                        }
+
+                        Text {
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                            text: root.space-note;
+                            font-size: 12px;
+                            color: root.space-warning ? #c07830 : #808080;
+                            overflow: elide;
+                        }
+                    }
 
                     HorizontalLayout {
                         spacing: 8px;

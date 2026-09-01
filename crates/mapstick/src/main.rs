@@ -54,6 +54,7 @@ enum Cmd {
     PickOutputDir,
     StartDownload,
     Cancel,
+    SetDirectMode(bool),
     GoToMedia,
     GoBack,
     RefreshMedia,
@@ -95,6 +96,20 @@ impl Entry {
             released: self.released.as_str().into(),
         }
     }
+}
+
+/// Katalog na archiwa pobierane przed rozpakowaniem.
+///
+/// Nie leży na nośniku, bo o to właśnie chodzi: nośnik ma przyjąć wyłącznie
+/// rozpakowany wynik.
+fn work_directory() -> PathBuf {
+    let base = std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from))
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
+        .unwrap_or_else(std::env::temp_dir);
+
+    base.join("mapstick").join("archiwa")
 }
 
 /// Ile bajtów poleci przez sieć i ile zajmie na nośniku.
@@ -148,6 +163,8 @@ struct Worker {
     download: Option<JoinHandle<()>>,
     media: Vec<Medium>,
     pending_format: Option<usize>,
+    /// Gdy prawda, archiwa lądują na nośniku razem z wynikiem.
+    direct_to_medium: bool,
 }
 
 impl Worker {
@@ -165,6 +182,7 @@ impl Worker {
             download: None,
             media: Vec::new(),
             pending_format: None,
+            direct_to_medium: false,
         }
     }
 
@@ -342,11 +360,72 @@ impl Worker {
     }
 
     /// Ile miejsca trzeba na nośniku dla wybranego modelu.
+    ///
+    /// Przy pobieraniu wprost na nośnik muszą się na nim zmieścić naraz
+    /// archiwa i to, co z nich powstaje — czyli mniej więcej dwa razy tyle.
     fn required_bytes(&self) -> u64 {
         self.firmware
             .as_ref()
-            .map(|f| firmware_totals(f).1)
+            .map(|f| {
+                let (download, extracted) = firmware_totals(f);
+
+                if self.direct_to_medium {
+                    download + extracted
+                } else {
+                    extracted
+                }
+            })
             .unwrap_or(0)
+    }
+
+    /// Opis zapotrzebowania na miejsce, pokazywany przy przełączniku trybu.
+    fn push_space_note(&self) {
+        let Some(firmware) = &self.firmware else {
+            self.with_ui(|ui| {
+                ui.set_space_note("".into());
+                ui.set_space_warning(false);
+            });
+            return;
+        };
+
+        let (download, extracted) = firmware_totals(firmware);
+
+        let (note, warning) = if self.direct_to_medium {
+            (
+                format!(
+                    "Nośnik musi pomieścić naraz archiwa i wynik: ok. {}. Zapis na kość pamięci jest \
+                     przez to podwojony.",
+                    format_size(download + extracted)
+                ),
+                true,
+            )
+        } else {
+            let work = work_directory();
+            let free = mapstick_media::space_for(&work)
+                .or_else(|_| {
+                    work.parent()
+                        .map(mapstick_media::space_for)
+                        .unwrap_or(Err(mapstick_media::Error::Unsupported))
+                })
+                .map(|s| s.free)
+                .unwrap_or(0);
+
+            let enough = free == 0 || free >= mapstick_media::with_margin(download);
+
+            (
+                format!(
+                    "Archiwa ({}) trafią na dysk, na nośnik idzie tylko wynik ({}).",
+                    format_size(download),
+                    format_size(extracted)
+                ),
+                !enough,
+            )
+        };
+
+        self.with_ui(move |ui| {
+            ui.set_space_note(note.into());
+            ui.set_space_warning(warning);
+        });
     }
 
     fn push_media_rows(&self) {
@@ -555,20 +634,32 @@ impl Worker {
         let car = self.entries[index].car.clone();
         let authority = ambient_authority();
         Dir::create_ambient_dir_all(&output, authority)?;
-        let directory = Dir::open_ambient_dir(&output, authority)?;
+        let out_dir = Dir::open_ambient_dir(&output, authority)?;
 
         let ui = self.ui.clone();
         let client = NuClientBuilder::new().build()?;
 
-        let (downloader, mut progress_rx) = Downloader::new(
-            directory,
-            client,
-            car,
-            firmware,
-            CONCURRENCY,
-            RETRIES,
-            false,
-        );
+        // Domyślnie archiwa lądują na dysku, a na nośnik trafia sam wynik.
+        // Zapisów na kość pamięci jest wtedy o połowę mniej, a rozpakowywanie
+        // nakłada się w czasie z pobieraniem kolejnych archiwów.
+        let (downloader, mut progress_rx) = if self.direct_to_medium {
+            Downloader::new(out_dir, client, car, firmware, CONCURRENCY, RETRIES, false)
+        } else {
+            let work = work_directory();
+            Dir::create_ambient_dir_all(&work, authority)?;
+            let work_dir = Dir::open_ambient_dir(&work, authority)?;
+
+            Downloader::new_split(
+                out_dir,
+                work_dir,
+                client,
+                car,
+                firmware,
+                CONCURRENCY,
+                RETRIES,
+                false,
+            )
+        };
 
         let _ = ui.upgrade_in_event_loop(|ui| {
             ui.set_downloading(true);
@@ -686,6 +777,11 @@ impl Worker {
                     }
                 }
                 Cmd::Cancel => self.cancel(),
+                Cmd::SetDirectMode(direct) => {
+                    self.direct_to_medium = direct;
+                    self.push_space_note();
+                    self.push_media_rows();
+                }
                 Cmd::GoToMedia => {
                     let summary = match (&self.selected, self.required_bytes()) {
                         (Some(i), needed) if needed > 0 => format!(
@@ -701,6 +797,7 @@ impl Worker {
                         ui.set_target_summary(summary.into());
                         ui.set_page(1);
                     });
+                    self.push_space_note();
                     self.refresh_media().await;
                 }
                 Cmd::GoBack => self.with_ui(|ui| ui.set_page(0)),
@@ -760,6 +857,10 @@ fn main() -> Result<()> {
         }
 
         let _ = tx.send(Cmd::Select(0));
+
+        if std::env::var_os("MAPSTICK_DEV_DIRECT").is_some() {
+            let _ = tx.send(Cmd::SetDirectMode(true));
+        }
 
         if stage == "nosnik" {
             let _ = tx.send(Cmd::GoToMedia);
@@ -842,7 +943,12 @@ fn wire_callbacks(ui: &AppWindow, tx: UnboundedSender<Cmd>) {
         let _ = t.send(Cmd::ConfirmFormat);
     });
 
+    let t = tx.clone();
     ui.on_cancel_format(move || {
-        let _ = tx.send(Cmd::CancelFormat);
+        let _ = t.send(Cmd::CancelFormat);
+    });
+
+    ui.on_set_direct_mode(move |direct| {
+        let _ = tx.send(Cmd::SetDirectMode(direct));
     });
 }
