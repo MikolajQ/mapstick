@@ -63,6 +63,8 @@ export struct MediumRow {
     status: string,
     usable: bool,
     installed: string,
+    /// Rozmiar plików poprzedniego wydania. Puste — nie ma czego usuwać.
+    stale: string,
 }
 
 export component AppWindow inherits Window {
@@ -133,6 +135,7 @@ export component AppWindow inherits Window {
     callback select-medium(int);
     callback pick-output-dir();
     callback request-format(int);
+    callback remove-stale(int);
     callback confirm-format();
     callback cancel-format();
     callback start-download();
@@ -444,7 +447,7 @@ export component AppWindow inherits Window {
 
                 if root.media.length > 0: ListView {
                     for m[i] in root.media: Rectangle {
-                        height: 74px;
+                        height: 88px;
                         background: root.selected-medium == i ? #4a90d922 : (mtouch.has-hover ? #8881 : transparent);
 
                         mtouch := TouchArea {
@@ -479,9 +482,16 @@ export component AppWindow inherits Window {
                                     font-weight: 700;
                                     color: m.usable ? #4a9d5f : #c07830;
                                 }
+                                if m.stale != "": Button {
+                                    text: "Usuń stare mapy (" + m.stale + ")";
+                                    enabled: !root.downloading && !root.copying
+                                        && !root.formatting;
+                                    clicked => { root.remove-stale(i); }
+                                }
                                 Button {
                                     text: "Formatuj do exFAT";
-                                    enabled: !root.downloading && !root.formatting;
+                                    enabled: !root.downloading && !root.copying
+                                        && !root.formatting;
                                     clicked => { root.request-format(i); }
                                 }
                             }

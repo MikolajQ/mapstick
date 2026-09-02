@@ -4,7 +4,7 @@
 //! MapStick — graficzna nakładka na nudl.
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -29,7 +29,9 @@ use tokio::{
     time::Instant,
 };
 
+mod cache;
 mod copy;
+mod stale;
 
 slint::include_modules!();
 
@@ -78,6 +80,7 @@ enum Cmd {
     RefreshMedia,
     SelectMedium(usize),
     RequestFormat(usize),
+    RemoveStale(usize),
     ConfirmFormat,
     CancelFormat,
     FavouritesRefreshed(Vec<FavouriteVersion>),
@@ -144,42 +147,12 @@ impl Entry {
     }
 }
 
-/// Katalog na archiwa pobierane przed rozpakowaniem.
-///
-/// Nie leży na nośniku, bo o to właśnie chodzi: nośnik ma przyjąć wyłącznie
-/// rozpakowany wynik.
-fn work_directory() -> PathBuf {
-    let base = std::env::var_os("XDG_CACHE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from))
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
-        .unwrap_or_else(std::env::temp_dir);
-
-    base.join("mapstick").join("archiwa")
-}
-
 fn brand_index(name: &str) -> usize {
     BRAND_NAMES.iter().position(|b| *b == name).unwrap_or(0)
 }
 
 fn region_index(code: &str) -> usize {
     REGIONS.iter().position(|(c, _)| *c == code).unwrap_or(0)
-}
-
-/// Sumaryczny rozmiar katalogu, licząc podkatalogi.
-fn directory_size(path: &Path) -> u64 {
-    let Ok(entries) = std::fs::read_dir(path) else {
-        return 0;
-    };
-
-    entries
-        .flatten()
-        .map(|e| match e.file_type() {
-            Ok(t) if t.is_dir() => directory_size(&e.path()),
-            Ok(_) => e.metadata().map(|m| m.len()).unwrap_or(0),
-            Err(_) => 0,
-        })
-        .sum()
 }
 
 /// Ile bajtów poleci przez sieć i ile zajmie na nośniku.
@@ -581,6 +554,14 @@ impl Worker {
         // i regionu, bez dodatkowego zapytania.
         self.update_favourites_from(&entries);
 
+        // …i sprzątamy archiwa wydań, których producent już nie wystawia.
+        self.sweep_cache(
+            entries
+                .iter()
+                .map(|e| (e.car.id.clone(), e.car.versions.clone()))
+                .collect(),
+        );
+
         let count = entries.len();
         self.entries = entries;
         self.filter.clear();
@@ -787,9 +768,74 @@ impl Worker {
         self.push_target_state();
     }
 
+    /// Pliki poprzedniego wydania leżące we wskazanym miejscu.
+    ///
+    /// Puste, dopóki nie wiemy, co zapisze nowe wydanie — bez tej listy nie
+    /// da się odróżnić sieroty od pliku, który i tak zostanie nadpisany.
+    fn stale_on_target(&self, target: &Path) -> stale::Stale {
+        let (Some(index), Some(firmware)) = (self.selected, self.firmware.as_ref()) else {
+            return stale::Stale::default();
+        };
+
+        let keep: HashSet<String> = firmware
+            .files
+            .iter()
+            .map(|f| match &f.directory {
+                Some(d) => format!("{d}/{}", f.name),
+                None => f.name.clone(),
+            })
+            .collect();
+
+        stale::find(target, &self.entries[index].car.id, &keep)
+    }
+
+    /// Usuwa z nośnika pliki poprzedniego wydania, o które nikt się już nie
+    /// upomni. Ręczne wyjście na wypadek, gdy brakuje miejsca na nowe.
+    fn remove_stale(&mut self, index: usize) {
+        let Some(mount) = self.media.get(index).and_then(|m| m.mount_point.clone()) else {
+            return;
+        };
+
+        let stale = self.stale_on_target(&mount);
+
+        if stale.is_empty() {
+            self.set_status("Nie ma tam plików poprzedniego wydania.", false);
+            return;
+        }
+
+        let bytes = stale.bytes;
+        let count = stale::remove(&mount, &stale);
+
+        self.set_status(
+            format!(
+                "Usunięto {count} plików poprzedniego wydania — odzyskane {}.",
+                format_size(bytes)
+            ),
+            false,
+        );
+    }
+
+    /// Kasuje archiwa, które nie mogą się już przydać.
+    ///
+    /// `known` wypełniamy wyłącznie pełnymi spisami wersji z katalogu
+    /// producenta. Przy niepełnym można by skasować archiwum wariantu, który
+    /// dzieli identyfikator modelu z innym — a te bywają dwa (HEV i PHEV).
+    fn sweep_cache(&self, known: HashMap<String, Vec<String>>) {
+        let swept = cache::sweep(&known, cache::MAX_AGE);
+
+        if swept.directories > 0 {
+            tracing::info!(
+                "Sprzątnięto {} katalogów archiwów, odzyskane {} B",
+                swept.directories,
+                swept.bytes
+            );
+            self.push_leftovers();
+        }
+    }
+
     /// Ile miejsca zajmują archiwa pozostałe po wcześniejszych pobraniach.
     fn push_leftovers(&self) {
-        let size = directory_size(&work_directory());
+        let size = cache::directory_size(&cache::base());
         let text = if size > 0 {
             format_size(size)
         } else {
@@ -801,7 +847,7 @@ impl Worker {
     }
 
     fn clear_cache(&self) {
-        let work = work_directory();
+        let work = cache::base();
 
         match std::fs::remove_dir_all(&work) {
             Ok(()) => self.set_status("Pozostałości archiwów usunięte.", false),
@@ -837,7 +883,7 @@ impl Worker {
                 true,
             )
         } else {
-            let work = work_directory();
+            let work = cache::base();
             let free = mapstick_media::space_for(&work)
                 .or_else(|_| {
                     work.parent()
@@ -900,14 +946,28 @@ impl Worker {
                     // pobieranie skończy się natychmiast i niczego nie zmieni.
                     _ if same_version => ("na nośniku jest już bieżąca wersja".to_owned(), true),
                     _ if needed > 0 && !m.fits(needed) => ("za mało miejsca".to_owned(), false),
-                    // Nazwy plików niosą numer wersji, więc stary komplet nie
-                    // zostanie nadpisany ani usunięty — zostanie obok nowego.
-                    _ if other_version => ("inna wersja — zalecane formatowanie".to_owned(), false),
+                    // Prawie wszystkie pliki mają stałe ścieżki, więc nowe
+                    // wydanie nadpisze je w miejscu; osierocone zostaje głównie
+                    // archiwum map, bo jego nazwa niesie numer bazy. Auto go nie
+                    // zainstaluje — czyta manifest — więc to kwestia miejsca,
+                    // nie poprawności.
+                    _ if other_version => (
+                        "inna wersja — stare pliki usuniemy po pobraniu".to_owned(),
+                        true,
+                    ),
                     _ => ("gotowy".to_owned(), true),
                 };
 
                 let installed = found
                     .map(|i| format!("{} {}", i.model_id, i.firmware_version))
+                    .unwrap_or_default();
+
+                let stale = m
+                    .mount_point
+                    .as_deref()
+                    .map(|p| self.stale_on_target(p))
+                    .filter(|s| !s.is_empty())
+                    .map(|s| format_size(s.bytes))
                     .unwrap_or_default();
 
                 let details = format!(
@@ -930,6 +990,7 @@ impl Worker {
                     status: status.as_str().into(),
                     usable,
                     installed: installed.into(),
+                    stale: stale.into(),
                 }
             })
             .collect();
@@ -1144,16 +1205,20 @@ impl Worker {
             at: mapstick_store::now(),
         };
 
+        // Sieroty po poprzednim wydaniu wyliczamy teraz, bo za chwilę nowy
+        // manifest nadpisze stary i nie będzie już czym ich rozpoznać.
+        let stale = self.stale_on_target(&output);
+
         // Domyślnie archiwa lądują na dysku, a na nośnik trafia sam wynik.
         // Zapisów na kość pamięci jest wtedy o połowę mniej, a rozpakowywanie
         // nakłada się w czasie z pobieraniem kolejnych archiwów.
         // Po udanym pobraniu archiwa nie są już do niczego potrzebne.
-        let cleanup = (!self.direct_to_medium).then(work_directory);
+        let work = cache::for_download(&car.id, &record.version);
+        let cleanup = (!self.direct_to_medium).then(|| work.clone());
 
         let (downloader, mut progress_rx) = if self.direct_to_medium {
             Downloader::new(out_dir, client, car, firmware, CONCURRENCY, RETRIES, false)
         } else {
-            let work = work_directory();
             Dir::create_ambient_dir_all(&work, authority)?;
             let work_dir = Dir::open_ambient_dir(&work, authority)?;
 
@@ -1241,11 +1306,23 @@ impl Worker {
                         Err(e) => tracing::warn!("Nie udało się usunąć archiwów: {e}"),
                     }
                 } else {
-                    let size = directory_size(work);
+                    let size = cache::directory_size(work);
                     if size > 0 {
                         leftovers = format_size(size);
                     }
                 }
+            }
+
+            // Stare mapy kasujemy dopiero po powodzeniu. Zrobione wcześniej
+            // zwolniłoby miejsce, ale nieudane pobranie zostawiłoby nośnik
+            // bez żadnej działającej wersji.
+            if succeeded && !stale.is_empty() {
+                let count = stale::remove(&output, &stale);
+                tracing::info!(
+                    "Usunięto {count} plików poprzedniego wydania ({} B) z {}",
+                    stale.bytes,
+                    output.display()
+                );
             }
 
             // Wersję bierzemy z tego, co naprawdę wylądowało na dysku — spis
@@ -1296,7 +1373,10 @@ impl Worker {
             .map(|d| d.version.clone())
             .unwrap_or_default();
 
-        let total = directory_size(&source);
+        let total = cache::directory_size(&source);
+
+        // Tak samo jak przy pobieraniu: listę robimy teraz, kasujemy po fakcie.
+        let stale = self.stale_on_target(&target);
 
         // Katalog przejściowy leży na nośniku, więc potrzeba tyle, ile waży
         // źródło — nie dwa razy tyle.
@@ -1356,6 +1436,14 @@ impl Worker {
                     return Ok::<CopyEnd, anyhow::Error>(CopyEnd::Cancelled);
                 }
 
+                if !stale.is_empty() {
+                    let count = stale::remove(&target, &stale);
+                    tracing::info!(
+                        "Usunięto {count} plików poprzedniego wydania ({} B)",
+                        stale.bytes
+                    );
+                }
+
                 // Kasujemy z dysku dopiero wtedy, gdy nośnik sam potwierdzi, że
                 // ma tę wersję, i gdy przeczytaliśmy ze źródła tyle, ile waży.
                 let removed = if delete_source {
@@ -1364,7 +1452,7 @@ impl Worker {
                         .flatten()
                         .is_some_and(|i| i.model_id == model_id && i.firmware_version == version);
 
-                    if landed && done == directory_size(&moved_source) {
+                    if landed && done == cache::directory_size(&moved_source) {
                         std::fs::remove_dir_all(&moved_source)?;
                         Some(true)
                     } else {
@@ -1445,6 +1533,14 @@ impl Worker {
 
     /// Odtwarza stan po uruchomieniu: ulubione, ich wersje i ostatni model.
     async fn startup(&mut self) {
+        let freed = cache::migrate();
+        if freed > 0 {
+            tracing::info!("Usunięto archiwa w starym układzie: {freed} B");
+        }
+
+        // Po samym czasie — pełnych spisów wersji jeszcze nie mamy.
+        self.sweep_cache(HashMap::new());
+
         self.store = match Store::load(&self.store_path) {
             Ok(store) => store,
             Err(e) => {
@@ -1590,6 +1686,10 @@ impl Worker {
                 Cmd::GoBack => self.with_ui(|ui| ui.set_page(0)),
                 Cmd::RefreshMedia => self.refresh_media().await,
                 Cmd::SelectMedium(i) => self.select_medium(i),
+                Cmd::RemoveStale(i) => {
+                    self.remove_stale(i);
+                    self.refresh_media().await;
+                }
                 Cmd::RequestFormat(i) => self.request_format(i),
                 Cmd::ConfirmFormat => self.confirm_format().await,
                 Cmd::CancelFormat => {
@@ -1747,6 +1847,11 @@ fn wire_callbacks(ui: &AppWindow, tx: UnboundedSender<Cmd>) {
         if index >= 0 {
             let _ = t.send(Cmd::SelectMedium(index as usize));
         }
+    });
+
+    let t = tx.clone();
+    ui.on_remove_stale(move |index| {
+        let _ = t.send(Cmd::RemoveStale(index.max(0) as usize));
     });
 
     let t = tx.clone();
