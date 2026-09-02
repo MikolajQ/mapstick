@@ -500,8 +500,9 @@ export component AppWindow inherits Window {
                 }
             }
 
+            // Bez narzuconej wysokości: panel bierze tyle, ile trzeba na
+            // zawinięte objaśnienie, które bywa długie.
             Rectangle {
-                height: 206px;
                 border-width: 1px;
                 border-color: #8884;
                 border-radius: 4px;
@@ -511,24 +512,20 @@ export component AppWindow inherits Window {
                     padding: 12px;
                     spacing: 8px;
 
-                    HorizontalLayout {
-                        spacing: 12px;
+                    CheckBox {
+                        text: "Pobieraj pliki prosto na nośnik wymienny";
+                        checked: root.direct-to-medium;
+                        enabled: !root.downloading;
+                        toggled => { root.set-direct-mode(self.checked); }
+                    }
 
-                        CheckBox {
-                            text: "Pobieraj pliki prosto na nośnik wymienny";
-                            checked: root.direct-to-medium;
-                            enabled: !root.downloading;
-                            toggled => { root.set-direct-mode(self.checked); }
-                        }
-
-                        Text {
-                            vertical-alignment: center;
-                            horizontal-stretch: 1;
-                            text: root.space-note;
-                            font-size: 12px;
-                            color: root.space-warning ? #c07830 : #808080;
-                            overflow: elide;
-                        }
+                    // Objaśnienie idzie pod spodem i się zawija — obok krzyżyka
+                    // zostawało mu tyle miejsca, że ucinało się w połowie zdania.
+                    Text {
+                        text: root.space-note;
+                        font-size: 12px;
+                        color: root.space-warning ? #c07830 : #808080;
+                        wrap: word-wrap;
                     }
 
                     HorizontalLayout {

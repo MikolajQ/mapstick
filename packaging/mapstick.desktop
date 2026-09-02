@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=MapStick
+Comment=Przygotowanie nośnika z aktualizacją nawigacji Hyundaia, Kii i Genesisa
+Exec=mapstick %u
+Terminal=false
+Categories=Utility;
+# Schematy, którymi strona producenta uruchamia aplikację po naciśnięciu
+# „Download". Zarejestrowanie ich jest świadomym wyborem użytkownika: na
+# Windowsie i macOS należą do oficjalnego Navigation Updatera.
+MimeType=x-scheme-handler/com.hyundai.update.nau;x-scheme-handler/com.kia.update.nau;x-scheme-handler/com.genesis.update.nau;

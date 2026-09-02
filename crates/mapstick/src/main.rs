@@ -31,6 +31,8 @@ use tokio::{
 
 mod cache;
 mod copy;
+mod instance;
+mod link;
 mod stale;
 
 slint::include_modules!();
@@ -64,7 +66,9 @@ const UI_REFRESH: Duration = Duration::from_millis(100);
 /// Polecenia płynące z wątku interfejsu do zadania sieciowego.
 #[derive(Debug)]
 enum Cmd {
-    Startup,
+    /// `restore` fałszywe, gdy zaraz przyjdzie odnośnik — odtwarzanie
+    /// ostatniego modelu byłoby wtedy pobraniem katalogu na darmo.
+    Startup { restore: bool },
     ToggleFavourite,
     OpenFavourite(String),
     LoadModels { brand: usize, region: usize },
@@ -89,6 +93,10 @@ enum Cmd {
     /// Wskazanie celu z pominięciem okna wyboru — wyłącznie do testów.
     UseDirectory(PathBuf),
     SetDeleteAfterCopy(bool),
+    /// Odnośnik ze strony producenta, kliknięty przez użytkownika.
+    OpenLink(String),
+    /// Świeżo zebrane odnośniki z katalogu producenta.
+    LinksCollected(Vec<(String, link::Target)>),
     /// Kopiowanie dobiegło końca — także przerwane albo nieudane.
     /// `forget` niesie model, którego dane zniknęły z dysku.
     CopyEnded { forget: Option<String> },
@@ -253,6 +261,10 @@ struct Worker {
     copy_cancel: Option<Arc<AtomicBool>>,
     /// Czy po skopiowaniu skasować dane z dysku (czyli „przenieś”).
     delete_after_copy: bool,
+    /// Odnośnik → pojazd, zbierane z katalogu producenta.
+    link_table: link::Table,
+    /// Model do zaznaczenia po kodzie `mcode`, gdy przyjdzie z odnośnika.
+    pending_mcode: Option<String>,
 }
 
 impl Worker {
@@ -277,6 +289,8 @@ impl Worker {
             pending_select: None,
             copy_cancel: None,
             delete_after_copy: false,
+            link_table: link::Table::default(),
+            pending_mcode: None,
         }
     }
 
@@ -569,13 +583,22 @@ impl Worker {
 
         self.set_status(format!("Znaleziono {count} modeli."), false);
 
-        // Odtworzenie ostatniego wyboru albo skok z ulubionych.
-        if let Some(id) = self.pending_select.take()
-            && let Some(visible) = self
+        // Odtworzenie ostatniego wyboru, skok z ulubionych albo z odnośnika.
+        // Odnośnik niesie `mcode`, bo tym kluczem opisuje pojazdy katalog
+        // strony; ulubione i ostatni wybór — identyfikator modelu.
+        let wanted = match (self.pending_select.take(), self.pending_mcode.take()) {
+            (Some(id), _) => self
                 .filtered
                 .iter()
-                .position(|&i| self.entries[i].car.id == id)
-        {
+                .position(|&i| self.entries[i].car.id == id),
+            (None, Some(mcode)) => self
+                .filtered
+                .iter()
+                .position(|&i| self.entries[i].car.mcode == mcode),
+            (None, None) => None,
+        };
+
+        if let Some(visible) = wanted {
             self.select(visible).await?;
         }
 
@@ -876,7 +899,7 @@ impl Worker {
             (
                 format!(
                     "Nośnik musi pomieścić naraz archiwa i wynik ich rozpakowywania: ok. {}. \
-                     Zapis na kość pamięci jest przez to podwojony. Używaj, jeśli masz duży \
+                     Zapis na kość pamięci jest przez to podwojony. Używaj tylko, jeśli masz duży \
                      nośnik i nie masz miejsca na dysku twardym.",
                     format_size(download + extracted)
                 ),
@@ -1532,7 +1555,7 @@ impl Worker {
     }
 
     /// Odtwarza stan po uruchomieniu: ulubione, ich wersje i ostatni model.
-    async fn startup(&mut self) {
+    async fn startup(&mut self, restore: bool) {
         let freed = cache::migrate();
         if freed > 0 {
             tracing::info!("Usunięto archiwa w starym układzie: {freed} B");
@@ -1552,6 +1575,14 @@ impl Worker {
         self.push_favourites();
 
         self.spawn_favourite_refresh();
+
+        self.link_table = link::Table::load();
+        tracing::info!("Tablica odnośników: {} wpisów", self.link_table.links.len());
+        self.spawn_link_refresh(self.combos_in_use());
+
+        if !restore {
+            return;
+        }
 
         let Some(last) = self.store.last_selection.clone() else {
             self.set_status(
@@ -1573,6 +1604,155 @@ impl Worker {
         if let Err(e) = self.load_models(brand, region).await {
             self.set_status(format!("Nie udało się pobrać listy: {e}"), true);
         }
+    }
+
+    /// Marki i regiony, którymi użytkownik faktycznie się posługuje.
+    ///
+    /// Tablicę odnośników budujemy tylko dla nich: pełny katalog to trzynaście
+    /// regionów razy trzy marki, czyli tysiące zapytań o pliki, których nikt
+    /// nigdy nie otworzy.
+    fn combos_in_use(&self) -> Vec<(String, String)> {
+        let mut combos: Vec<(String, String)> = self
+            .store
+            .items
+            .iter()
+            .map(|f| (f.brand.clone(), f.region.clone()))
+            .collect();
+
+        combos.push((
+            BRAND_NAMES[self.brand_position()].to_owned(),
+            self.region.clone(),
+        ));
+
+        if let Some(last) = &self.store.last_selection {
+            combos.push((last.brand.clone(), last.region.clone()));
+        }
+
+        combos.sort();
+        combos.dedup();
+        combos
+    }
+
+    /// Zbiera odnośniki w tle, żeby kliknięcie na stronie trafiło od razu.
+    fn spawn_link_refresh(&self, combos: Vec<(String, String)>) {
+        if combos.is_empty() {
+            return;
+        }
+
+        let tx = self.tx.clone();
+
+        tokio::spawn(async move {
+            let mut found = Vec::new();
+
+            for (brand, region) in combos {
+                let code = BRANDS[brand_index(&brand)].as_code_str();
+
+                match link::collect(&brand, code, &region).await {
+                    Ok(mut links) => found.append(&mut links),
+                    Err(e) => tracing::warn!("Odnośniki {brand}/{region}: {e}"),
+                }
+            }
+
+            if !found.is_empty() {
+                let _ = tx.send(Cmd::LinksCollected(found));
+            }
+        });
+    }
+
+    fn apply_links(&mut self, found: Vec<(String, link::Target)>) {
+        let added = self.link_table.merge(found);
+        tracing::info!(
+            "Tablica odnośników: {} wpisów ({added} nowych)",
+            self.link_table.links.len()
+        );
+
+        if let Err(e) = self.link_table.save() {
+            tracing::warn!("Nie udało się zapisać tablicy odnośników: {e}");
+        }
+    }
+
+    /// Otwiera pojazd wskazany odnośnikiem ze strony producenta.
+    ///
+    /// Sam odnośnik jest nieczytelny, więc rozpoznajemy go przez zestawienie
+    /// z katalogiem. Gdy go w tablicy nie ma — bo modelowi właśnie wyszła nowa
+    /// wersja i ciąg się zmienił — dociągamy katalog i próbujemy raz jeszcze.
+    async fn open_link(&mut self, url: String) {
+        let Some(brand) = link::brand_of(&url) else {
+            self.set_status("To nie jest odnośnik aktualizacji.", true);
+            return;
+        };
+
+        if let Some(target) = self.link_table.find(&url).cloned() {
+            self.open_target(target).await;
+            return;
+        }
+
+        self.set_status("Rozpoznaję odnośnik ze strony producenta…", false);
+
+        // Najpierw regiony, których użytkownik używa — auto stoi w jednym.
+        let regions: Vec<String> = self
+            .combos_in_use()
+            .into_iter()
+            .filter(|(b, _)| b == brand)
+            .map(|(_, r)| r)
+            .collect();
+        let regions = if regions.is_empty() {
+            vec![self.region.clone()]
+        } else {
+            regions
+        };
+
+        let code = BRANDS[brand_index(brand)].as_code_str();
+
+        for region in &regions {
+            match link::collect(brand, code, region).await {
+                Ok(found) => self.apply_links(found),
+                Err(e) => tracing::warn!("Odnośniki {brand}/{region}: {e}"),
+            }
+
+            if let Some(target) = self.link_table.find(&url).cloned() {
+                self.open_target(target).await;
+                return;
+            }
+        }
+
+        self.set_status(
+            format!(
+                "Nie rozpoznaję tego odnośnika. Sprawdziłem {} w regionach: {}. \
+                 Jeśli auto jest z innego regionu, wybierz go i naciśnij „Pokaż modele”.",
+                brand,
+                regions.join(", ")
+            ),
+            true,
+        );
+    }
+
+    async fn open_target(&mut self, target: link::Target) {
+        let (brand, region) = (brand_index(&target.brand), region_index(&target.region));
+        let (b, r) = (brand as i32, region as i32);
+
+        self.with_ui(move |ui| {
+            ui.set_page(0);
+            ui.set_brand_index(b);
+            ui.set_region_index(r);
+        });
+
+        self.pending_select = None;
+        self.pending_mcode = Some(target.mcode.clone());
+        self.set_busy(true);
+
+        tracing::info!(
+            "Odnośnik wskazuje {} ({}), {}",
+            target.name,
+            target.mcode,
+            target.version
+        );
+
+        if let Err(e) = self.load_models(brand, region).await {
+            self.set_status(format!("Nie udało się pobrać listy: {e}"), true);
+        }
+
+        self.set_busy(false);
     }
 
     async fn open_favourite(&mut self, model_id: String) {
@@ -1640,10 +1820,12 @@ impl Worker {
                     self.push_media_rows();
                 }
                 Cmd::ClearCache => self.clear_cache(),
-                Cmd::Startup => self.startup().await,
+                Cmd::Startup { restore } => self.startup(restore).await,
                 Cmd::ToggleFavourite => self.toggle_favourite(),
                 Cmd::OpenFavourite(id) => self.open_favourite(id).await,
                 Cmd::FavouritesRefreshed(versions) => self.apply_favourite_versions(versions),
+                Cmd::OpenLink(url) => self.open_link(url).await,
+                Cmd::LinksCollected(found) => self.apply_links(found),
                 Cmd::DownloadFinished(record) => self.record_download(*record),
                 Cmd::StartCopy => {
                     if let Err(e) = self.start_copy() {
@@ -1710,6 +1892,16 @@ fn main() -> Result<()> {
         .install_default()
         .map_err(|_| anyhow!("Nie udało się ustawić dostawcy kryptografii rustls"))?;
 
+    // Uruchomienie z odnośnikiem ze strony producenta. Jeśli okno już stoi
+    // otwarte, oddajemy mu odnośnik i kończymy — drugie okno nikomu nie służy.
+    let link = std::env::args().nth(1).filter(|a| link::is_link(a));
+
+    if let Some(url) = &link
+        && instance::hand_off(url)
+    {
+        return Ok(());
+    }
+
     let ui = AppWindow::new()?;
 
     let regions: Vec<SharedString> = REGIONS.iter().map(|(_, label)| (*label).into()).collect();
@@ -1732,9 +1924,22 @@ fn main() -> Result<()> {
             runtime.block_on(Worker::new(weak, worker_tx).run(rx));
         })?;
 
+    instance::listen({
+        let t = tx.clone();
+        move |url| {
+            let _ = t.send(Cmd::OpenLink(url));
+        }
+    });
+
     // Pomoc dla testów na maszynie bez sterowania myszą: MAPSTICK_DEV=lista
     // wczytuje modele, MAPSTICK_DEV=nosnik dodatkowo wchodzi w widok nośnika.
-    let _ = tx.send(Cmd::Startup);
+    let _ = tx.send(Cmd::Startup {
+        restore: link.is_none(),
+    });
+
+    if let Some(url) = link {
+        let _ = tx.send(Cmd::OpenLink(url));
+    }
 
     if let Ok(stage @ ("lista" | "nosnik")) = std::env::var("MAPSTICK_DEV").as_deref() {
         let _ = tx.send(Cmd::LoadModels {
@@ -1778,6 +1983,8 @@ fn main() -> Result<()> {
     wire_callbacks(&ui, tx);
 
     ui.run()?;
+    instance::cleanup();
+
     Ok(())
 }
 
