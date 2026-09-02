@@ -3287,6 +3287,7 @@ dependencies = [
  "rustls",
  "slint",
  "slint-build",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",

@@ -4,17 +4,22 @@
 //! MapStick — graficzna nakładka na nudl.
 
 use std::{
+    collections::HashSet,
     path::{Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 
 use anyhow::{Result, anyhow};
 use cap_std::{ambient_authority, fs::Dir};
 use mapstick_media::Medium;
-use mapstick_store::{Favourite, InstalledSource, LastSelection, Store};
+use mapstick_store::{Download, Favourite, InstalledSource, LastSelection, Store};
 use nudl::{
     cli::Brand,
-    client::{CarInfo, FirmwareInfo, NuClient, NuClientBuilder},
+    client::{CarInfo, FirmwareInfo, NuClientBuilder},
     download::{Downloader, ProgressMessage},
 };
 use slint::{ModelRc, SharedString, VecModel, Weak};
@@ -23,6 +28,8 @@ use tokio::{
     task::JoinHandle,
     time::Instant,
 };
+
+mod copy;
 
 slint::include_modules!();
 
@@ -73,6 +80,34 @@ enum Cmd {
     RequestFormat(usize),
     ConfirmFormat,
     CancelFormat,
+    FavouritesRefreshed(Vec<FavouriteVersion>),
+    DownloadFinished(Box<Download>),
+    StartCopy,
+    /// Wskazanie celu z pominięciem okna wyboru — wyłącznie do testów.
+    UseDirectory(PathBuf),
+    SetDeleteAfterCopy(bool),
+    /// Kopiowanie dobiegło końca — także przerwane albo nieudane.
+    /// `forget` niesie model, którego dane zniknęły z dysku.
+    CopyEnded { forget: Option<String> },
+}
+
+/// Czym skończyło się zadanie kopiujące.
+enum CopyEnd {
+    /// `removed`: `None` — nie proszono o usunięcie źródła; `Some` — proszono,
+    /// a wartość mówi, czy do niego doszło.
+    Done {
+        model_id: String,
+        removed: Option<bool>,
+    },
+    Cancelled,
+}
+
+/// Najnowsze wydanie ulubionego modelu, przyniesione przez zadanie w tle.
+#[derive(Debug)]
+struct FavouriteVersion {
+    model_id: String,
+    version: Option<String>,
+    released: Option<String>,
 }
 
 /// Wiersz listy wzbogacony o dane, których nie ma w znormalizowanym `CarInfo`.
@@ -184,9 +219,45 @@ fn format_size(bytes: u64) -> String {
     }
 }
 
+/// Pobiera katalog modeli w postaci surowej i przerabia na [`Entry`].
+///
+/// Surowa odpowiedź niesie `mediaType` i `releaseDate`, których nie ma
+/// w znormalizowanym `CarInfo` — inaczej trzeba by o te same dane pytać
+/// serwis dwa razy.
+///
+/// Wolna funkcja, nie metoda: sprawdzanie ulubionych dzieje się w osobnym
+/// zadaniu, które nie ma dostępu do [`Worker`].
+async fn fetch_entries(brand_code: &str, region: &str) -> Result<Vec<Entry>> {
+    let client = NuClientBuilder::new().build()?;
+    client.validate_region(brand_code, region).await?;
+    let guid = client.get_guid(region).await?;
+    let raw = client.get_cars_raw(region, &guid, brand_code).await?;
+
+    let mut entries = Vec::with_capacity(raw.cars.len());
+    for car in raw.cars {
+        let media = car.media_type.clone();
+        let released = car.release_date.clone().unwrap_or_default();
+
+        // Pojedyncze auto z nieoczekiwanym kształtem danych nie może
+        // wywrócić całej listy.
+        match CarInfo::try_from(car) {
+            Ok(info) => entries.push(Entry {
+                car: info,
+                media,
+                released,
+            }),
+            Err(e) => tracing::warn!("Pomijam pojazd o nieoczekiwanych danych: {e}"),
+        }
+    }
+
+    Ok(entries)
+}
+
 /// Stan zadania sieciowego. Żyje w całości poza wątkiem interfejsu.
 struct Worker {
     ui: Weak<AppWindow>,
+    /// Nadajnik poleceń — zadania w tle odsyłają nim wyniki do pętli.
+    tx: UnboundedSender<Cmd>,
     brand: Brand,
     region: String,
     entries: Vec<Entry>,
@@ -204,12 +275,18 @@ struct Worker {
     store_path: PathBuf,
     /// Model do zaznaczenia, gdy tylko lista modeli będzie gotowa.
     pending_select: Option<String>,
+    /// Przełącznik przerwania kopiowania. Kopiowanie jest blokujące, więc nie
+    /// da się go zdjąć zwykłym `abort()` — musi samo zauważyć, że ma przestać.
+    copy_cancel: Option<Arc<AtomicBool>>,
+    /// Czy po skopiowaniu skasować dane z dysku (czyli „przenieś”).
+    delete_after_copy: bool,
 }
 
 impl Worker {
-    fn new(ui: Weak<AppWindow>) -> Self {
+    fn new(ui: Weak<AppWindow>, tx: UnboundedSender<Cmd>) -> Self {
         Self {
             ui,
+            tx,
             brand: Brand::Hyundai,
             region: REGIONS[0].0.to_owned(),
             entries: Vec::new(),
@@ -225,6 +302,8 @@ impl Worker {
             store: Store::default(),
             store_path: mapstick_store::default_path(),
             pending_select: None,
+            copy_cancel: None,
+            delete_after_copy: false,
         }
     }
 
@@ -303,31 +382,22 @@ impl Worker {
             .items
             .iter()
             .map(|f| {
-                let (status, has_update) = match f.has_update() {
-                    Some(true) => ("nowa wersja", true),
-                    Some(false) => ("bez zmian", false),
-                    None => ("wersja nieznana", false),
-                };
-
-                // Pokazujemy to, co uznajemy za obecne w aucie; gdy tego nie
-                // wiemy — najnowsze dostępne, wyraźnie opisane.
-                let version = match (&f.installed_version, &f.latest_seen_version) {
-                    (Some(v), _) => v.clone(),
-                    (None, Some(v)) => match &f.latest_released {
-                        // Data idzie przed wersją, bo przy wąskiej kolumnie to
-                        // wersja zostanie skrócona, a nie ona.
-                        Some(released) => format!("dostępna {released}: {v}"),
-                        None => format!("dostępna: {v}"),
-                    },
-                    (None, None) => "—".to_owned(),
+                // Ramka mówi wyłącznie o tym, co jest do wzięcia u producenta.
+                // O wersji siedzącej w aucie celowo tu nie zgadujemy — na to
+                // jest widok modelu, gdzie da się dopisać, skąd ją znamy.
+                //
+                // Data idzie przed wersją: przy wąskiej kolumnie skróci się
+                // wersja, a nie ona.
+                let version = match (&f.latest_released, &f.latest_seen_version) {
+                    (Some(released), Some(v)) => format!("{released} - {v}"),
+                    (None, Some(v)) => v.clone(),
+                    (_, None) => "—".to_owned(),
                 };
 
                 FavouriteRow {
                     model_id: f.model_id.as_str().into(),
                     label: f.label.as_str().into(),
                     version: version.into(),
-                    status: status.into(),
-                    has_update,
                 }
             })
             .collect();
@@ -417,9 +487,13 @@ impl Worker {
         changed
     }
 
-    /// Odświeża wersje wszystkich ulubionych — po jednym zapytaniu na
-    /// kombinację marki i regionu, bo lista modeli i tak przychodzi w całości.
-    async fn refresh_favourites(&mut self) {
+    /// Zleca sprawdzenie wersji ulubionych osobnemu zadaniu.
+    ///
+    /// Odpytujemy po jednym zapytaniu na kombinację marki i regionu, bo lista
+    /// modeli i tak przychodzi w całości. Robi to zadanie w tle, żeby start
+    /// aplikacji nie czekał na sieć — ostatnio wybrany model ma się pokazać
+    /// od razu, a wersje ulubionych dopisać się same, gdy przyjdą.
+    fn spawn_favourite_refresh(&self) {
         let mut combos: Vec<(String, String)> = self
             .store
             .items
@@ -429,51 +503,65 @@ impl Worker {
         combos.sort();
         combos.dedup();
 
-        for (brand, region) in combos {
-            let code = BRANDS[brand_index(&brand)].as_code_str();
+        if combos.is_empty() {
+            return;
+        }
 
-            match self.fetch_entries(code, &region).await {
-                Ok(entries) => {
-                    self.update_favourites_from(&entries);
+        let wanted: HashSet<String> = self
+            .store
+            .items
+            .iter()
+            .map(|f| f.model_id.clone())
+            .collect();
+        let tx = self.tx.clone();
+
+        tokio::spawn(async move {
+            let mut found = Vec::new();
+
+            for (brand, region) in combos {
+                let code = BRANDS[brand_index(&brand)].as_code_str();
+
+                match fetch_entries(code, &region).await {
+                    Ok(entries) => found.extend(
+                        entries
+                            .into_iter()
+                            .filter(|e| wanted.contains(&e.car.id))
+                            .map(|e| FavouriteVersion {
+                                model_id: e.car.id,
+                                version: e.car.versions.into_iter().next(),
+                                released: Some(e.released).filter(|r| !r.is_empty()),
+                            }),
+                    ),
+                    Err(e) => tracing::warn!("Nie udało się sprawdzić {brand}/{region}: {e}"),
                 }
-                Err(e) => tracing::warn!("Nie udało się sprawdzić {brand}/{region}: {e}"),
             }
-        }
+
+            let _ = tx.send(Cmd::FavouritesRefreshed(found));
+        });
     }
 
-    /// Pobiera katalog modeli w postaci surowej i przerabia na [`Entry`].
+    /// Przyjmuje wersje przyniesione z tła.
     ///
-    /// Surowa odpowiedź niesie `mediaType` i `releaseDate`, których nie ma
-    /// w znormalizowanym `CarInfo` — inaczej trzeba by o te same dane pytać
-    /// serwis dwa razy.
-    async fn fetch_entries(&self, brand_code: &str, region: &str) -> Result<Vec<Entry>> {
-        let client = self.client().await?;
-        client.validate_region(brand_code, region).await?;
-        let guid = client.get_guid(region).await?;
-        let raw = client.get_cars_raw(region, &guid, brand_code).await?;
+    /// Wpisy, których w międzyczasie nie ma już w ulubionych, po prostu
+    /// pomijamy — użytkownik mógł je usunąć, zanim odpowiedź wróciła.
+    fn apply_favourite_versions(&mut self, versions: Vec<FavouriteVersion>) {
+        let mut changed = false;
 
-        let mut entries = Vec::with_capacity(raw.cars.len());
-        for car in raw.cars {
-            let media = car.media_type.clone();
-            let released = car.release_date.clone().unwrap_or_default();
+        for item in versions {
+            let Some(favourite) = self.store.get_mut(&item.model_id) else {
+                continue;
+            };
 
-            // Pojedyncze auto z nieoczekiwanym kształtem danych nie może
-            // wywrócić całej listy.
-            match CarInfo::try_from(car) {
-                Ok(info) => entries.push(Entry {
-                    car: info,
-                    media,
-                    released,
-                }),
-                Err(e) => tracing::warn!("Pomijam pojazd o nieoczekiwanych danych: {e}"),
-            }
+            favourite.latest_seen_version = item.version;
+            favourite.latest_released = item.released;
+            favourite.latest_checked_at = Some(mapstick_store::now());
+            changed = true;
         }
 
-        Ok(entries)
-    }
-
-    async fn client(&self) -> Result<NuClient> {
-        Ok(NuClientBuilder::new().build()?)
+        if changed {
+            self.save_store();
+            self.push_favourites();
+        }
     }
 
     async fn load_models(&mut self, brand: usize, region: usize) -> Result<()> {
@@ -487,7 +575,7 @@ impl Worker {
             .to_owned();
 
         let code = self.brand.as_code_str();
-        let entries = self.fetch_entries(code, &self.region).await?;
+        let entries = fetch_entries(code, &self.region).await?;
 
         // Lista i tak przyszła — przy okazji odświeżamy ulubione z tej marki
         // i regionu, bez dodatkowego zapytania.
@@ -552,7 +640,7 @@ impl Worker {
 
         // Rozmiar znany jest dopiero po odpytaniu /car/download, więc dociągamy
         // go osobno — dzięki temu sprawdzenie wolnego miejsca będzie dokładne.
-        let client = self.client().await?;
+        let client = NuClientBuilder::new().build()?;
         let firmware = client
             .get_firmware_info(&self.region, &self.entries[index].car)
             .await?;
@@ -634,6 +722,69 @@ impl Worker {
 
         tracing::info!("cel zawiera bieżącą wersję: {current}");
         self.with_ui(move |ui| ui.set_target_has_current(current));
+        self.push_copy_state();
+    }
+
+    /// Katalog na dysku, w którym leży już gotowe oprogramowanie dla wybranego
+    /// modelu — czyli to, co można przenieść na nośnik zamiast pobierać.
+    ///
+    /// Sam wpis w pliku nie wystarcza: katalog mógł zniknąć albo zostać
+    /// podmieniony, więc wersję potwierdzamy odczytem `.ver` na miejscu.
+    fn ready_copy(&self) -> Option<PathBuf> {
+        let index = self.selected?;
+        let car = &self.entries[index].car;
+        let record = self.store.download_for(&car.id)?;
+
+        // Interesuje nas tylko to, co zgadza się z bieżącym wydaniem.
+        if !car.versions.contains(&record.version) {
+            return None;
+        }
+
+        // Kopiowanie katalogu w to samo miejsce nie ma sensu.
+        if self.output_dir.as_deref() == Some(record.path.as_path()) {
+            return None;
+        }
+
+        let installed = mapstick_media::read_installed(&record.path).ok().flatten()?;
+
+        (installed.model_id == car.id && installed.firmware_version == record.version)
+            .then(|| record.path.clone())
+    }
+
+    fn push_copy_state(&self) {
+        let shown = self
+            .ready_copy()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+
+        tracing::info!(
+            "gotowe dane na dysku: {}",
+            if shown.is_empty() { "brak" } else { &shown }
+        );
+        self.with_ui(move |ui| ui.set_copy_source(shown.into()));
+    }
+
+    /// Zapisuje, że dane leżą już na dysku.
+    ///
+    /// Ten sam wpis odpowiada za dwie rzeczy: propozycję skopiowania na nośnik
+    /// i pole „poprzednio pobrana wersja” w ulubionych.
+    fn record_download(&mut self, record: Download) {
+        if let Some(favourite) = self.store.get_mut(&record.model_id) {
+            favourite.downloaded_version = Some(record.version.clone());
+            favourite.downloaded_at = Some(record.at.clone());
+        }
+
+        tracing::info!(
+            "{}: {} zapisane w {}",
+            record.model_id,
+            record.version,
+            record.path.display()
+        );
+
+        self.store.record_download(record);
+        self.save_store();
+        self.push_favourites();
+        self.push_target_state();
     }
 
     /// Ile miejsca zajmują archiwa pozostałe po wcześniejszych pobraniach.
@@ -954,6 +1105,15 @@ impl Worker {
         self.push_target_state();
     }
 
+    /// Ustawia cel bez okna wyboru — pod testy na maszynie bez myszy.
+    fn use_directory(&mut self, path: PathBuf) {
+        let shown = path.display().to_string();
+        self.output_dir = Some(path);
+
+        self.with_ui(move |ui| ui.set_output_dir(shown.into()));
+        self.push_target_state();
+    }
+
     fn start_download(&mut self) -> Result<()> {
         let (Some(index), Some(firmware)) = (self.selected, self.firmware.clone()) else {
             return Err(anyhow!("Najpierw wybierz model i poczekaj na rozmiar."));
@@ -969,7 +1129,20 @@ impl Worker {
         let out_dir = Dir::open_ambient_dir(&output, authority)?;
 
         let ui = self.ui.clone();
+        let tx = self.tx.clone();
         let client = NuClientBuilder::new().build()?;
+
+        // Opis pobrania kompletujemy tutaj, a nie po powrocie zadania: do tego
+        // czasu użytkownik może już oglądać inny model.
+        let record = Download {
+            model_id: car.id.clone(),
+            label: car.name.clone(),
+            brand: BRAND_NAMES[self.brand_position()].to_owned(),
+            region: self.region.clone(),
+            version: car.versions.first().cloned().unwrap_or_default(),
+            path: output.clone(),
+            at: mapstick_store::now(),
+        };
 
         // Domyślnie archiwa lądują na dysku, a na nośnik trafia sam wynik.
         // Zapisów na kość pamięci jest wtedy o połowę mniej, a rozpakowywanie
@@ -1075,6 +1248,16 @@ impl Worker {
                 }
             }
 
+            // Wersję bierzemy z tego, co naprawdę wylądowało na dysku — spis
+            // producenta mówi, co powinno przyjść, plik `.ver` mówi, co przyszło.
+            if succeeded {
+                let mut record = record;
+                if let Ok(Some(installed)) = mapstick_media::read_installed(&output) {
+                    record.version = installed.firmware_version;
+                }
+                let _ = tx.send(Cmd::DownloadFinished(Box::new(record)));
+            }
+
             let _ = ui.upgrade_in_event_loop(move |ui| {
                 ui.set_downloading(false);
                 ui.set_status(message.into());
@@ -1090,9 +1273,165 @@ impl Worker {
         Ok(())
     }
 
+    /// Kopiuje gotowe dane z dysku na nośnik.
+    ///
+    /// Nic tu nie idzie przez sieć — to przepisanie tego, co już mamy, więc
+    /// całość leci na wątku blokującym, a nie w pętli asynchronicznej.
+    fn start_copy(&mut self) -> Result<()> {
+        let source = self.ready_copy().ok_or_else(|| {
+            anyhow!("Na dysku nie ma gotowego oprogramowania dla tego modelu.")
+        })?;
+        let target = self
+            .output_dir
+            .clone()
+            .ok_or_else(|| anyhow!("Nie wybrano nośnika."))?;
+        let index = self
+            .selected
+            .ok_or_else(|| anyhow!("Nie wybrano modelu."))?;
+
+        let model_id = self.entries[index].car.id.clone();
+        let version = self
+            .store
+            .download_for(&model_id)
+            .map(|d| d.version.clone())
+            .unwrap_or_default();
+
+        let total = directory_size(&source);
+
+        // Katalog przejściowy leży na nośniku, więc potrzeba tyle, ile waży
+        // źródło — nie dwa razy tyle.
+        if let Ok(space) = mapstick_media::space_for(&target)
+            && space.free < mapstick_media::with_margin(total)
+        {
+            return Err(anyhow!(
+                "Na nośniku jest {} wolnego, a dane zajmują {}.",
+                format_size(space.free),
+                format_size(total)
+            ));
+        }
+
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.copy_cancel = Some(cancel.clone());
+
+        let delete_source = self.delete_after_copy;
+        let ui = self.ui.clone();
+        let tx = self.tx.clone();
+
+        self.with_ui(|ui| {
+            ui.set_copying(true);
+            ui.set_progress(0.0);
+            ui.set_progress_text("Kopiowanie…".into());
+        });
+
+        self.download = Some(tokio::spawn(async move {
+            let painter = ui.clone();
+            let moved_source = source.clone();
+
+            let result = tokio::task::spawn_blocking(move || {
+                let mut done = 0u64;
+                let mut last_paint = std::time::Instant::now() - UI_REFRESH;
+
+                let outcome = copy::stage_and_place(&moved_source, &target, &cancel, &mut |n| {
+                    done += n;
+
+                    if last_paint.elapsed() < UI_REFRESH {
+                        return;
+                    }
+                    last_paint = std::time::Instant::now();
+
+                    let fraction = if total > 0 {
+                        (done as f32 / total as f32).min(1.0)
+                    } else {
+                        0.0
+                    };
+                    let text = format!("{} z {}", format_size(done), format_size(total));
+
+                    let _ = painter.upgrade_in_event_loop(move |ui| {
+                        ui.set_progress(fraction);
+                        ui.set_progress_text(text.into());
+                    });
+                })?;
+
+                if outcome == copy::Outcome::Cancelled {
+                    return Ok::<CopyEnd, anyhow::Error>(CopyEnd::Cancelled);
+                }
+
+                // Kasujemy z dysku dopiero wtedy, gdy nośnik sam potwierdzi, że
+                // ma tę wersję, i gdy przeczytaliśmy ze źródła tyle, ile waży.
+                let removed = if delete_source {
+                    let landed = mapstick_media::read_installed(&target)
+                        .ok()
+                        .flatten()
+                        .is_some_and(|i| i.model_id == model_id && i.firmware_version == version);
+
+                    if landed && done == directory_size(&moved_source) {
+                        std::fs::remove_dir_all(&moved_source)?;
+                        Some(true)
+                    } else {
+                        Some(false)
+                    }
+                } else {
+                    None
+                };
+
+                Ok(CopyEnd::Done {
+                    model_id,
+                    removed,
+                })
+            })
+            .await;
+
+            let mut forget = None;
+
+            let (message, is_error) = match result {
+                Ok(Ok(CopyEnd::Done { model_id, removed })) => {
+                    forget = (removed == Some(true)).then_some(model_id);
+
+                    match removed {
+                        None => ("Skopiowane na nośnik.".to_owned(), false),
+                        Some(true) => (
+                            "Skopiowane na nośnik, kopia z dysku usunięta.".to_owned(),
+                            false,
+                        ),
+                        Some(false) => (
+                            "Skopiowane na nośnik, ale kopii z dysku nie usunąłem — \
+                             nie potwierdziłem zgodności. Sprawdź nośnik i usuń ją ręcznie."
+                                .to_owned(),
+                            true,
+                        ),
+                    }
+                }
+                Ok(Ok(CopyEnd::Cancelled)) => (
+                    "Kopiowanie przerwane. Na nośniku nie ma kompletnych danych.".to_owned(),
+                    true,
+                ),
+                Ok(Err(e)) => (format!("Kopiowanie nie powiodło się: {e}"), true),
+                Err(e) => (format!("Kopiowanie przerwane: {e}"), true),
+            };
+
+            let _ = tx.send(Cmd::CopyEnded { forget });
+
+            let _ = ui.upgrade_in_event_loop(move |ui| {
+                ui.set_copying(false);
+                ui.set_status(message.into());
+                ui.set_status_is_error(is_error);
+            });
+        }));
+
+        Ok(())
+    }
+
     /// Przerwanie polega na porzuceniu przyszłości pobierania — nudl zapisuje
     /// postęp na bieżąco, więc wznowienie sprowadza się do ponownego startu.
     fn cancel(&mut self) {
+        // Kopiowanie jest blokujące — `abort()` by go nie zatrzymał, więc
+        // podnosimy flagę i czekamy, aż zauważy ją sama pętla kopiująca.
+        if let Some(flag) = self.copy_cancel.take() {
+            flag.store(true, Ordering::Relaxed);
+            self.set_status("Przerywam kopiowanie…", false);
+            return;
+        }
+
         if let Some(handle) = self.download.take() {
             handle.abort();
         }
@@ -1116,10 +1455,7 @@ impl Worker {
 
         self.push_favourites();
 
-        if !self.store.items.is_empty() {
-            self.set_status("Sprawdzanie wersji ulubionych…", false);
-            self.refresh_favourites().await;
-        }
+        self.spawn_favourite_refresh();
 
         let Some(last) = self.store.last_selection.clone() else {
             self.set_status(
@@ -1195,6 +1531,7 @@ impl Worker {
                     }
                 }
                 Cmd::PickOutputDir => self.pick_output_dir().await,
+                Cmd::UseDirectory(path) => self.use_directory(path),
                 Cmd::StartDownload => {
                     if let Err(e) = self.start_download() {
                         self.set_status(e.to_string(), true);
@@ -1210,6 +1547,26 @@ impl Worker {
                 Cmd::Startup => self.startup().await,
                 Cmd::ToggleFavourite => self.toggle_favourite(),
                 Cmd::OpenFavourite(id) => self.open_favourite(id).await,
+                Cmd::FavouritesRefreshed(versions) => self.apply_favourite_versions(versions),
+                Cmd::DownloadFinished(record) => self.record_download(*record),
+                Cmd::StartCopy => {
+                    if let Err(e) = self.start_copy() {
+                        self.copy_cancel = None;
+                        self.with_ui(|ui| ui.set_copying(false));
+                        self.set_status(e.to_string(), true);
+                    }
+                }
+                Cmd::SetDeleteAfterCopy(delete) => self.delete_after_copy = delete,
+                Cmd::CopyEnded { forget } => {
+                    self.copy_cancel = None;
+
+                    if let Some(model_id) = forget {
+                        self.store.forget_download(&model_id);
+                        self.save_store();
+                    }
+
+                    self.push_target_state();
+                }
                 Cmd::GoToMedia => {
                     let summary = match (&self.selected, self.required_bytes()) {
                         (Some(i), needed) if needed > 0 => format!(
@@ -1263,6 +1620,7 @@ fn main() -> Result<()> {
     let (tx, rx) = mpsc::unbounded_channel();
 
     let weak = ui.as_weak();
+    let worker_tx = tx.clone();
     std::thread::Builder::new()
         .name("mapstick-net".to_owned())
         .spawn(move || {
@@ -1271,7 +1629,7 @@ fn main() -> Result<()> {
                 .build()
                 .expect("Nie udało się uruchomić środowiska tokio");
 
-            runtime.block_on(Worker::new(weak).run(rx));
+            runtime.block_on(Worker::new(weak, worker_tx).run(rx));
         })?;
 
     // Pomoc dla testów na maszynie bez sterowania myszą: MAPSTICK_DEV=lista
@@ -1303,6 +1661,17 @@ fn main() -> Result<()> {
             // Polecenia są przetwarzane po kolei, a GoToMedia czeka na
             // wykrycie nośników, więc lista jest już gotowa.
             let _ = tx.send(Cmd::SelectMedium(0));
+        }
+
+        // MAPSTICK_DEV_CEL wskazuje katalog docelowy zamiast okna wyboru,
+        // a MAPSTICK_DEV_KOPIUJ od razu uruchamia kopiowanie z dysku.
+        if let Ok(target) = std::env::var("MAPSTICK_DEV_CEL") {
+            let _ = tx.send(Cmd::UseDirectory(PathBuf::from(target)));
+
+            if let Ok(mode) = std::env::var("MAPSTICK_DEV_KOPIUJ").as_deref() {
+                let _ = tx.send(Cmd::SetDeleteAfterCopy(mode == "przenies"));
+                let _ = tx.send(Cmd::StartCopy);
+            }
         }
     }
 
@@ -1341,6 +1710,16 @@ fn wire_callbacks(ui: &AppWindow, tx: UnboundedSender<Cmd>) {
     let t = tx.clone();
     ui.on_start_download(move || {
         let _ = t.send(Cmd::StartDownload);
+    });
+
+    let t = tx.clone();
+    ui.on_start_copy(move || {
+        let _ = t.send(Cmd::StartCopy);
+    });
+
+    let t = tx.clone();
+    ui.on_set_delete_after_copy(move |delete| {
+        let _ = t.send(Cmd::SetDeleteAfterCopy(delete));
     });
 
     let t = tx.clone();

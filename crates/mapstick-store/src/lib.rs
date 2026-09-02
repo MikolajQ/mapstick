@@ -99,6 +99,25 @@ pub struct LastSelection {
     pub model_id: Option<String>,
 }
 
+/// Gotowe oprogramowanie leżące już na dysku.
+///
+/// Zapisujemy je osobno od ulubionych, bo pobrać można dowolny model, także
+/// taki, którego nikt nie oznaczył gwiazdką. Bez tego wpisu aplikacja po
+/// ponownym uruchomieniu nie wie, że dane już są, i jedyne, co potrafi
+/// zaproponować, to pobranie ich drugi raz.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Download {
+    pub model_id: String,
+    /// Nazwa modelu w chwili pobrania — do pokazania, gdy katalogu już nie ma.
+    pub label: String,
+    pub brand: String,
+    pub region: String,
+    pub version: String,
+    /// Katalog z rozpakowanym wynikiem.
+    pub path: PathBuf,
+    pub at: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Store {
     /// Numer schematu, od pierwszego dnia — żeby późniejsza zmiana formatu nie
@@ -108,6 +127,8 @@ pub struct Store {
     pub last_selection: Option<LastSelection>,
     #[serde(default)]
     pub items: Vec<Favourite>,
+    #[serde(default)]
+    pub downloads: Vec<Download>,
 }
 
 impl Default for Store {
@@ -116,6 +137,7 @@ impl Default for Store {
             version: 1,
             last_selection: None,
             items: Vec::new(),
+            downloads: Vec::new(),
         }
     }
 }
@@ -150,6 +172,27 @@ impl Store {
 
     pub fn get_mut(&mut self, model_id: &str) -> Option<&mut Favourite> {
         self.items.iter_mut().find(|f| f.model_id == model_id)
+    }
+
+    /// Zapisuje pobranie, zastępując wcześniejsze dla tego samego modelu.
+    ///
+    /// Jeden model to jedno miejsce na dysku: starsze wydanie w innym katalogu
+    /// i tak nie ma po co być pamiętane, bo aplikacja proponuje wyłącznie to,
+    /// co zgadza się z bieżącą wersją u producenta.
+    pub fn record_download(&mut self, download: Download) {
+        self.downloads.retain(|d| d.model_id != download.model_id);
+        self.downloads.push(download);
+    }
+
+    pub fn download_for(&self, model_id: &str) -> Option<&Download> {
+        self.downloads.iter().find(|d| d.model_id == model_id)
+    }
+
+    pub fn forget_download(&mut self, model_id: &str) -> bool {
+        let before = self.downloads.len();
+        self.downloads.retain(|d| d.model_id != model_id);
+
+        self.downloads.len() != before
     }
 
     /// Wczytuje z pliku. Brak pliku to nie błąd — to pierwsze uruchomienie.
@@ -270,6 +313,63 @@ mod tests {
 
         f.latest_seen_version = Some("B".to_owned());
         assert_eq!(f.has_update(), Some(true));
+    }
+
+    fn sample_download() -> Download {
+        Download {
+            model_id: "New_IONIQ5_EUR".to_owned(),
+            label: "New IONIQ 5".to_owned(),
+            brand: "hyundai".to_owned(),
+            region: "EU".to_owned(),
+            version: "NE1.ERT.ccNC_Lite.001.002.260312".to_owned(),
+            path: PathBuf::from("/dane/ioniq"),
+            at: now(),
+        }
+    }
+
+    /// Jeden model to jedno miejsce na dysku — powtórne pobranie w inne
+    /// miejsce zastępuje wpis, a nie dokłada drugiego.
+    #[test]
+    fn recording_a_download_replaces_the_previous_one() {
+        let mut store = Store::default();
+        store.record_download(sample_download());
+
+        let mut again = sample_download();
+        again.path = PathBuf::from("/dane/nowe");
+        store.record_download(again);
+
+        assert_eq!(store.downloads.len(), 1);
+        assert_eq!(
+            store.download_for("New_IONIQ5_EUR").unwrap().path,
+            PathBuf::from("/dane/nowe")
+        );
+    }
+
+    /// Pobrania przeżywają zapis do pliku, inaczej po ponownym uruchomieniu
+    /// aplikacja znów nie wiedziałaby, że dane leżą na dysku.
+    #[test]
+    fn downloads_survive_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ulubione.json");
+
+        let mut store = Store::default();
+        store.record_download(sample_download());
+        store.save(&path).unwrap();
+
+        let mut loaded = Store::load(&path).unwrap();
+        assert_eq!(loaded.downloads.len(), 1);
+        assert!(loaded.forget_download("New_IONIQ5_EUR"));
+    }
+
+    /// Plik sprzed dopisania pobrań musi się dalej wczytywać.
+    #[test]
+    fn older_files_load_without_the_downloads_field() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("stare.json");
+        std::fs::write(&path, r#"{"version":1,"items":[]}"#).unwrap();
+
+        let store = Store::load(&path).unwrap();
+        assert!(store.downloads.is_empty());
     }
 
     /// Gdy nie wiemy, co w aucie, ale wiemy, co sami pobraliśmy — to lepsze
