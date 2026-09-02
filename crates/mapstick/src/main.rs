@@ -709,7 +709,7 @@ impl Worker {
     ///
     /// Sprawdzamy sam katalog docelowy, a nie to, który nośnik został kliknięty
     /// — inaczej wybranie katalogu ręcznie omijałoby kontrolę.
-    fn push_target_state(&self) {
+    fn push_target_state(&mut self) {
         let current = match (&self.output_dir, self.selected) {
             (Some(dir), Some(index)) => {
                 let car = &self.entries[index].car;
@@ -725,8 +725,73 @@ impl Worker {
         };
 
         tracing::info!("cel zawiera bieżącą wersję: {current}");
+
+        // Katalog na dysku z gotową bieżącą wersją zapamiętujemy, choćby nie
+        // wziął się z naszego pobierania — użytkownik mógł go wskazać sam.
+        // Bez tego aplikacja nie miałaby skąd wiedzieć, że jest co przenieść
+        // na podłączony za chwilę nośnik.
+        if current && !self.target_is_medium() {
+            self.note_ready_directory();
+        }
+
         self.with_ui(move |ui| ui.set_target_has_current(current));
         self.push_copy_state();
+    }
+
+    /// Jedyny podłączony nośnik przejmuje rolę celu.
+    ///
+    /// Dzieje się to, gdy celu jeszcze nie ma albo gdy dotychczasowy okazał się
+    /// katalogiem z gotowym oprogramowaniem — taki katalog jest źródłem do
+    /// skopiowania, nie miejscem, w które cokolwiek pobierzemy. Ręcznie
+    /// wybranego katalogu bez gotowych plików nikt nie podmienia.
+    fn adopt_single_medium(&mut self) {
+        if self.media.len() != 1 || self.media[0].mount_point.is_none() {
+            return;
+        }
+
+        let target_is_source = self
+            .selected
+            .map(|i| &self.entries[i].car.id)
+            .and_then(|id| self.store.download_for(id))
+            .is_some_and(|d| Some(d.path.as_path()) == self.output_dir.as_deref());
+
+        if self.output_dir.is_none() || target_is_source {
+            self.select_medium(0);
+        }
+    }
+
+    /// Zapisuje wskazany katalog jako gotowe oprogramowanie dla tego modelu.
+    ///
+    /// Nie ruszamy przy tym „poprzednio pobranej wersji” w ulubionych: tych
+    /// plików nie pobraliśmy i nie mamy prawa tego twierdzić.
+    fn note_ready_directory(&mut self) {
+        let (Some(index), Some(path)) = (self.selected, self.output_dir.clone()) else {
+            return;
+        };
+
+        let car = &self.entries[index].car;
+        let version = car.versions.first().cloned().unwrap_or_default();
+
+        if self
+            .store
+            .download_for(&car.id)
+            .is_some_and(|d| d.path == path && d.version == version)
+        {
+            return;
+        }
+
+        tracing::info!("{}: gotowe pliki znalezione w {}", car.id, path.display());
+
+        self.store.record_download(Download {
+            model_id: car.id.clone(),
+            label: car.name.clone(),
+            brand: BRAND_NAMES[self.brand_position()].to_owned(),
+            region: self.region.clone(),
+            version,
+            path,
+            at: mapstick_store::now(),
+        });
+        self.save_store();
     }
 
     /// Katalog na dysku, w którym leży już gotowe oprogramowanie dla wybranego
@@ -898,9 +963,10 @@ impl Worker {
         let (note, warning) = if self.direct_to_medium {
             (
                 format!(
-                    "Nośnik musi pomieścić naraz archiwa i wynik ich rozpakowywania: ok. {}. \
-                     Zapis na kość pamięci jest przez to podwojony. Używaj tylko, jeśli masz duży \
-                     nośnik i nie masz miejsca na dysku twardym.",
+                    "Pobrane pliki wymagają rozpakowania i nośnik wymienny musi pomieścić \
+                     naraz archiwa i wynik ich rozpakowywania: ok. {}. Zapis na kość pamięci \
+                     jest przez to podwojony. Używaj tylko, jeśli masz duży nośnik i nie masz \
+                     dość wolnego miejsca na dysku twardym.",
                     format_size(download + extracted)
                 ),
                 true,
@@ -919,11 +985,22 @@ impl Worker {
             let enough = free == 0 || free >= mapstick_media::with_margin(download);
 
             (
-                format!(
-                    "Archiwa ({}) trafią na dysk, na nośnik idzie tylko wynik ({}).",
-                    format_size(download),
-                    format_size(extracted)
-                ),
+                (if self.target_is_medium() {
+                        format!(
+                            "Pobrane archiwa ({}) trafią tymczasowo na dysk twardy, a na nośnik \
+                             wymienny trafi tylko wynik ich rozpakowywania ({}).",
+                            format_size(download),
+                            format_size(extracted)
+                        )
+                    } else {
+                        format!(
+                            "Pobrane archiwa zostaną rozpakowane do wybranego katalogu \
+                             (potrzeba {}). Po zakończeniu pobierania podłącz urządzenie \
+                             przenośne i kliknij „Odśwież” celem skopiowania lub przeniesienia \
+                             danych na podpięty nośnik.",
+                            format_size(extracted)
+                        )
+                    }),
                 !enough,
             )
         };
@@ -932,6 +1009,17 @@ impl Worker {
             ui.set_space_note(note.into());
             ui.set_space_warning(warning);
         });
+    }
+
+    /// Czy cel to jeden z wykrytych nośników wymiennych, a nie zwykły katalog.
+    fn target_is_medium(&self) -> bool {
+        let Some(target) = &self.output_dir else {
+            return false;
+        };
+
+        self.media
+            .iter()
+            .any(|m| m.mount_point.as_deref() == Some(target.as_path()))
     }
 
     fn push_media_rows(&self) {
@@ -975,14 +1063,16 @@ impl Worker {
                     // zainstaluje — czyta manifest — więc to kwestia miejsca,
                     // nie poprawności.
                     _ if other_version => (
-                        "inna wersja — stare pliki usuniemy po pobraniu".to_owned(),
+                        "Na nośniku wymiennym znajduje się inna wersja oprogramowania \
+                         i zostanie usunięta po pobraniu aktualnej"
+                            .to_owned(),
                         true,
                     ),
                     _ => ("gotowy".to_owned(), true),
                 };
 
-                let installed = found
-                    .map(|i| format!("{} {}", i.model_id, i.firmware_version))
+                let (installed_model, installed_version) = found
+                    .map(|i| (i.model_id, i.firmware_version))
                     .unwrap_or_default();
 
                 let stale = m
@@ -1012,7 +1102,8 @@ impl Worker {
                     details: details.into(),
                     status: status.as_str().into(),
                     usable,
-                    installed: installed.into(),
+                    installed_model: installed_model.into(),
+                    installed_version: installed_version.into(),
                     stale: stale.into(),
                 }
             })
@@ -1041,6 +1132,11 @@ impl Worker {
                     );
                 } else {
                     self.set_status(format!("Znaleziono nośników: {count}."), false);
+
+                    // Jeden podłączony nośnik to jedyny sensowny cel. Bez tego
+                    // „Pobierz” zostaje wyszarzony, a jedyną podpowiedzią jest
+                    // kliknięcie w wiersz, który wcale nie wygląda na klikalny.
+                    self.adopt_single_medium();
                 }
             }
             Err(e) => {
@@ -1049,6 +1145,11 @@ impl Worker {
                 self.set_status(format!("Nie udało się wykryć nośników: {e}"), true);
             }
         }
+
+        // Zawartość celu mogła się zmienić między odświeżeniami — choćby
+        // dlatego, że ktoś wgrał pliki na nośnik ręcznie. Bez ponownego
+        // sprawdzenia aplikacja trwałaby przy tym, co widziała ostatnio.
+        self.push_target_state();
 
         self.with_ui(|ui| ui.set_media_busy(false));
     }
@@ -1187,6 +1288,11 @@ impl Worker {
 
         self.with_ui(move |ui| ui.set_output_dir(shown.into()));
         self.push_target_state();
+
+        // Lista nośników jest już wykryta, więc jeśli wskazany katalog okazał
+        // się gotowym źródłem, propozycja skopiowania ma się pokazać od razu —
+        // bez naciskania „Odśwież”.
+        self.adopt_single_medium();
     }
 
     /// Ustawia cel bez okna wyboru — pod testy na maszynie bez myszy.

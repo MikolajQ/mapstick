@@ -62,9 +62,99 @@ export struct MediumRow {
     details: string,
     status: string,
     usable: bool,
-    installed: string,
+    /// Model odczytany z nośnika i jego wersja — osobno, bo razem tworzyły
+    /// wiersz szerszy niż okno.
+    installed_model: string,
+    installed_version: string,
     /// Rozmiar plików poprzedniego wydania. Puste — nie ma czego usuwać.
     stale: string,
+}
+
+/// Krzyżyk z zawijanym opisem.
+///
+/// Widgetowy `CheckBox` trzyma napis w jednym wierszu i przy dłuższym zdaniu
+/// rozpycha rząd, wypychając sąsiednie przyciski poza okno.
+component WrapCheckBox inherits Rectangle {
+    in property <string> caption;
+    in property <bool> checked;
+    in property <bool> enabled: true;
+    callback toggled(bool);
+
+    min-height: 20px;
+
+    check-touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { root.toggled(!root.checked); }
+    }
+
+    HorizontalLayout {
+        spacing: 8px;
+
+        VerticalLayout {
+            alignment: center;
+
+            Rectangle {
+                width: 16px;
+                height: 16px;
+                border-width: 1px;
+                border-radius: 3px;
+                border-color: !root.enabled
+                    ? #88888844
+                    : (check-touch.has-hover ? #4a90d9 : #888888aa);
+                background: root.checked ? #4a90d9 : transparent;
+
+                Text {
+                    text: root.checked ? "✓" : "";
+                    color: #ffffff;
+                    font-size: 12px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: root.caption;
+            font-size: 14px;
+            vertical-alignment: center;
+            wrap: word-wrap;
+            opacity: root.enabled ? 1.0 : 0.5;
+        }
+    }
+}
+
+/// Przycisk czynności nieodwracalnej. Widgetowy `Button` nie daje się
+/// przemalować, a formatowanie musi wyglądać inaczej niż reszta.
+component DangerButton inherits Rectangle {
+    in property <string> caption;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 30px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: root.enabled ? #b04a3a : #8884;
+    background: !root.enabled
+        ? transparent
+        : (danger-touch.has-hover ? #b04a3a : #b04a3a22);
+
+    danger-touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+
+    Text {
+        text: root.caption;
+        vertical-alignment: center;
+        horizontal-alignment: center;
+        font-size: 13px;
+        color: !root.enabled
+            ? #888888
+            : (danger-touch.has-hover ? #ffffff : #c0563f);
+    }
 }
 
 export component AppWindow inherits Window {
@@ -447,7 +537,7 @@ export component AppWindow inherits Window {
 
                 if root.media.length > 0: ListView {
                     for m[i] in root.media: Rectangle {
-                        height: 88px;
+                        height: 116px;
                         background: root.selected-medium == i ? #4a90d922 : (mtouch.has-hover ? #8881 : transparent);
 
                         mtouch := TouchArea {
@@ -464,7 +554,21 @@ export component AppWindow inherits Window {
                                 Text { text: m.label; font-weight: 700; overflow: elide; }
                                 Text { text: m.details; font-size: 12px; opacity: 0.75; overflow: elide; }
                                 Text {
-                                    text: m.installed == "" ? m.id : m.id + "   ·   znaleziono: " + m.installed;
+                                    text: m.id;
+                                    font-size: 11px;
+                                    font-family: "monospace";
+                                    opacity: 0.6;
+                                    overflow: elide;
+                                }
+                                if m.installed_model != "": Text {
+                                    text: "znaleziono: " + m.installed_model;
+                                    font-size: 11px;
+                                    font-family: "monospace";
+                                    opacity: 0.6;
+                                    overflow: elide;
+                                }
+                                if m.installed_version != "": Text {
+                                    text: m.installed_version;
                                     font-size: 11px;
                                     font-family: "monospace";
                                     opacity: 0.6;
@@ -476,10 +580,12 @@ export component AppWindow inherits Window {
                                 alignment: center;
                                 spacing: 6px;
                                 Text {
+                                    width: 260px;
                                     horizontal-alignment: right;
                                     text: m.status;
                                     font-size: 12px;
                                     font-weight: 700;
+                                    wrap: word-wrap;
                                     color: m.usable ? #4a9d5f : #c07830;
                                 }
                                 if m.stale != "": Button {
@@ -488,8 +594,8 @@ export component AppWindow inherits Window {
                                         && !root.formatting;
                                     clicked => { root.remove-stale(i); }
                                 }
-                                Button {
-                                    text: "Formatuj do exFAT";
+                                DangerButton {
+                                    caption: "Formatuj do exFAT";
                                     enabled: !root.downloading && !root.copying
                                         && !root.formatting;
                                     clicked => { root.request-format(i); }
@@ -512,38 +618,14 @@ export component AppWindow inherits Window {
                     padding: 12px;
                     spacing: 8px;
 
-                    CheckBox {
-                        text: "Pobieraj pliki prosto na nośnik wymienny";
-                        checked: root.direct-to-medium;
-                        enabled: !root.downloading;
-                        toggled => { root.set-direct-mode(self.checked); }
-                    }
-
-                    // Objaśnienie idzie pod spodem i się zawija — obok krzyżyka
-                    // zostawało mu tyle miejsca, że ucinało się w połowie zdania.
-                    Text {
-                        text: root.space-note;
-                        font-size: 12px;
-                        color: root.space-warning ? #c07830 : #808080;
-                        wrap: word-wrap;
-                    }
-
+                    // Czynność główna po lewej i większa od reszty; wybór trybu
+                    // obok niej, a rzadko używany wybór katalogu na końcu.
                     HorizontalLayout {
-                        spacing: 8px;
-                        Button {
-                            text: "Inny katalog…";
-                            enabled: !root.downloading;
-                            clicked => { root.pick-output-dir(); }
-                        }
-                        Text {
-                            vertical-alignment: center;
-                            horizontal-stretch: 1;
-                            text: root.output-dir == "" ? "nie wybrano celu" : root.output-dir;
-                            font-size: 12px;
-                            opacity: root.output-dir == "" ? 0.5 : 0.85;
-                            overflow: elide;
-                        }
+                        spacing: 14px;
+
                         if !root.downloading && !root.copying && root.copy-source != "": Button {
+                            width: 190px;
+                            height: 42px;
                             text: "Skopiuj na nośnik";
                             primary: true;
                             enabled: root.output-dir != "" && !root.formatting
@@ -551,6 +633,8 @@ export component AppWindow inherits Window {
                             clicked => { root.start-copy(); }
                         }
                         if !root.downloading && !root.copying && root.copy-source == "": Button {
+                            width: 190px;
+                            height: 42px;
                             text: "Pobierz";
                             primary: true;
                             enabled: root.output-dir != "" && !root.formatting
@@ -558,20 +642,67 @@ export component AppWindow inherits Window {
                             clicked => { root.start-download(); }
                         }
                         if root.downloading || root.copying: Button {
+                            width: 190px;
+                            height: 42px;
                             text: "Anuluj";
                             clicked => { root.cancel-download(); }
                         }
+
+                        WrapCheckBox {
+                            horizontal-stretch: 1;
+                            min-width: 220px;
+                            caption: "Pobieraj pliki bezpośrednio na nośnik przenośny z pominięciem dysku twardego";
+                            checked: root.direct-to-medium;
+                            enabled: !root.downloading;
+                            toggled(on) => { root.set-direct-mode(on); }
+                        }
+
+                        Button {
+                            text: "Inny katalog…";
+                            enabled: !root.downloading;
+                            clicked => { root.pick-output-dir(); }
+                        }
+                    }
+
+                    // Samo `wrap` nie wystarcza: tekst w układzie sam zgłasza
+                    // szerokość całego zdania i rozpycha rząd zamiast się złamać.
+                    // Dopiero szerokość wzięta wprost od rodzica zmusza go do
+                    // zawijania na tyle wierszy, ile potrzeba.
+                    Rectangle {
+                        height: note.preferred-height;
+
+                        note := Text {
+                            width: parent.width;
+                            text: root.space-note;
+                            font-size: 12px;
+                            color: root.space-warning ? #c07830 : #808080;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    Text {
+                        text: root.output-dir == ""
+                            ? "Wybierz nośnik z listy powyżej albo wskaż inny katalog."
+                            : root.output-dir;
+                        font-size: 12px;
+                        opacity: root.output-dir == "" ? 0.6 : 0.85;
+                        overflow: elide;
                     }
 
                     if root.copy-source != "" && !root.downloading && !root.copying
                             && !root.target-has-current: VerticalLayout {
                         spacing: 3px;
 
-                        Text {
-                            text: "To oprogramowanie leży już na dysku — nie trzeba go pobierać drugi raz.";
-                            font-size: 12px;
-                            color: #4a9d5f;
-                            wrap: word-wrap;
+                        Rectangle {
+                            height: ready.preferred-height;
+
+                            ready := Text {
+                                width: parent.width;
+                                text: "To oprogramowanie leży już na dysku — nie trzeba go pobierać drugi raz.";
+                                font-size: 12px;
+                                color: #4a9d5f;
+                                wrap: word-wrap;
+                            }
                         }
                         Text {
                             text: root.copy-source;
@@ -587,10 +718,16 @@ export component AppWindow inherits Window {
                         }
                     }
 
-                    if root.target-has-current && !root.downloading: Text {
-                        text: "We wskazanym miejscu leży już bieżąca wersja — nie ma czego pobierać.";
-                        font-size: 12px;
-                        color: #4a9d5f;
+                    if root.target-has-current && !root.downloading: Rectangle {
+                        height: current.preferred-height;
+
+                        current := Text {
+                            width: parent.width;
+                            text: "We wskazanym miejscu leży już bieżąca wersja.";
+                            font-size: 12px;
+                            color: #4a9d5f;
+                            wrap: word-wrap;
+                        }
                     }
 
                     if root.leftovers != "" && !root.downloading: HorizontalLayout {
