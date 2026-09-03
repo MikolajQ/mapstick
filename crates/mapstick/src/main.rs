@@ -551,6 +551,30 @@ impl Worker {
         }
     }
 
+    /// Zapamiętuje, co ma się odtworzyć przy następnym uruchomieniu.
+    ///
+    /// Model podajemy tylko wtedy, gdy ktoś w niego kliknął. Przy samej zmianie
+    /// marki albo regionu zostaje ten zapamiętany wcześniej — ale wyłącznie
+    /// jeśli wciąż jest na świeżo pobranej liście, bo inaczej wskazywałby auto
+    /// innej marki, niż mówią oba pola.
+    fn remember_selection(&mut self, model_id: Option<String>) {
+        let model_id = model_id.or_else(|| {
+            let previous = self.store.last_selection.as_ref()?.model_id.as_ref()?;
+
+            self.entries
+                .iter()
+                .any(|e| &e.car.id == previous)
+                .then(|| previous.clone())
+        });
+
+        self.store.last_selection = Some(LastSelection {
+            brand: BRAND_NAMES[self.brand_position()].to_owned(),
+            region: self.region.clone(),
+            model_id,
+        });
+        self.save_store();
+    }
+
     async fn load_models(&mut self, brand: usize, region: usize) -> Result<()> {
         self.brand = *BRANDS
             .get(brand)
@@ -582,6 +606,11 @@ impl Worker {
         self.push_rows();
 
         self.set_status(format!("Znaleziono {count} modeli."), false);
+
+        // Sama zmiana marki albo regionu też jest wyborem. Bez tego zamknięcie
+        // okna przed kliknięciem w model wracałoby przy starcie do auta
+        // oglądanego poprzednim razem.
+        self.remember_selection(None);
 
         // Odtworzenie ostatniego wyboru, skok z ulubionych albo z odnośnika.
         // Odnośnik niesie `mcode`, bo tym kluczem opisuje pojazdy katalog
@@ -623,12 +652,8 @@ impl Worker {
         );
         let visible = visible_index as i32;
 
-        self.store.last_selection = Some(LastSelection {
-            brand: BRAND_NAMES[self.brand_position()].to_owned(),
-            region: self.region.clone(),
-            model_id: Some(entry.car.id.clone()),
-        });
-        self.save_store();
+        let id_for_store = entry.car.id.clone();
+        self.remember_selection(Some(id_for_store));
         self.push_selected_favourite_state();
 
         self.with_ui(move |ui| {
