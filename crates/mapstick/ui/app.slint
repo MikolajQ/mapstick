@@ -260,6 +260,11 @@ export component AppWindow inherits Window {
                         width: 150px;
                         model: root.brands;
                         current-index <=> root.brand-index;
+                        // Wybór jest poleceniem sam w sobie — bez tego lista
+                        // pokazywałaby modele innej marki, niż mówi to pole.
+                        selected => {
+                            root.load-models(self.current-index, region-box.current-index);
+                        }
                     }
                 }
 
@@ -270,19 +275,23 @@ export component AppWindow inherits Window {
                         width: 210px;
                         model: root.regions;
                         current-index <=> root.region-index;
+                        selected => {
+                            root.load-models(brand-box.current-index, self.current-index);
+                        }
                     }
                 }
 
+                // Stan wczytywania zamiast przycisku: wybór marki albo regionu
+                // sam pobiera listę, więc nie ma czego naciskać.
                 VerticalLayout {
                     spacing: 4px;
                     Text { text: " "; font-size: 12px; }
-                    Button {
-                        text: root.busy ? "Wczytywanie…" : "Pokaż modele";
-                        primary: true;
-                        enabled: !root.busy;
-                        clicked => {
-                            root.load-models(brand-box.current-index, region-box.current-index);
-                        }
+                    Text {
+                        height: 32px;
+                        vertical-alignment: center;
+                        text: root.busy ? "Wczytywanie…" : "";
+                        font-size: 12px;
+                        opacity: 0.7;
                     }
                 }
                 }

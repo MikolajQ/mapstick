@@ -1692,7 +1692,7 @@ impl Worker {
 
         let Some(last) = self.store.last_selection.clone() else {
             self.set_status(
-                "Wybierz markę i region, a potem naciśnij „Pokaż modele”.",
+                "Wybierz markę i region — lista modeli pobierze się sama.",
                 false,
             );
             return;
@@ -1825,7 +1825,7 @@ impl Worker {
         self.set_status(
             format!(
                 "Nie rozpoznaję tego odnośnika. Sprawdziłem {} w regionach: {}. \
-                 Jeśli auto jest z innego regionu, wybierz go i naciśnij „Pokaż modele”.",
+                 Jeśli auto jest z innego regionu, wybierz go z listy i kliknij ponownie.",
                 brand,
                 regions.join(", ")
             ),
@@ -2013,7 +2013,7 @@ fn main() -> Result<()> {
     let regions: Vec<SharedString> = REGIONS.iter().map(|(_, label)| (*label).into()).collect();
     ui.set_regions(ModelRc::new(VecModel::from(regions)));
     ui.set_models(ModelRc::new(VecModel::<ModelRow>::default()));
-    ui.set_status("Wybierz markę i region, a potem naciśnij „Pokaż modele”.".into());
+    ui.set_status("Wybierz markę i region — lista modeli pobierze się sama.".into());
 
     let (tx, rx) = mpsc::unbounded_channel();
 
