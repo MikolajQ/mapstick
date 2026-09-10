@@ -746,7 +746,9 @@ impl Worker {
                     .ok()
                     .flatten()
                     .is_some_and(|i| {
-                        i.model_id == car.id && car.versions.contains(&i.firmware_version)
+                        i.model_id == car.id
+                            && car.versions.contains(&i.firmware_version)
+                            && i.complete
                     })
             }
             _ => false,
@@ -844,7 +846,11 @@ impl Worker {
 
         let installed = mapstick_media::read_installed(&record.path).ok().flatten()?;
 
-        (installed.model_id == car.id && installed.firmware_version == record.version)
+        // Przerwane pobranie ma manifest, ale nie ma plików — nie ma czego
+        // z niego kopiować.
+        (installed.model_id == car.id
+            && installed.firmware_version == record.version
+            && installed.complete)
             .then(|| record.path.clone())
     }
 
@@ -1724,7 +1730,9 @@ impl Worker {
                     let landed = mapstick_media::read_installed(&target)
                         .ok()
                         .flatten()
-                        .is_some_and(|i| i.model_id == model_id && i.firmware_version == version);
+                        .is_some_and(|i| {
+                            i.model_id == model_id && i.firmware_version == version && i.complete
+                        });
 
                     if landed && done == cache::directory_size(&moved_source) {
                         std::fs::remove_dir_all(&moved_source)?;

@@ -107,6 +107,12 @@ pub struct Installed {
     pub model_id: String,
     pub firmware_version: String,
     pub brand: String,
+    /// Czy wszystkie pliki z manifestu leżą na miejscu i mają zapisany rozmiar.
+    ///
+    /// Sam manifest niczego nie dowodzi: pobieranie zapisuje go na początku,
+    /// nie na końcu. Przerwane pobranie zostawia więc pełny opis wydania obok
+    /// garstki plików — i bez tego sprawdzenia wyglądałoby jak komplet.
+    pub complete: bool,
 }
 
 /// Czy ścieżka montowania należy do nośników użytkownika.
@@ -282,16 +288,70 @@ pub fn read_installed(directory: &Path) -> Result<Option<Installed>> {
         .parse()
         .map_err(|e| Error::InvalidVerFile(path.clone(), e))?;
 
+    let complete = info.entries.iter().all(|entry| {
+        std::fs::metadata(directory.join(entry.path().as_ref()))
+            .is_ok_and(|m| m.is_file() && m.len() == entry.size)
+    });
+
     Ok(Some(Installed {
         model_id: info.header.id,
         firmware_version: info.header.firmware_version,
         brand: info.header.brand.as_code_str().to_owned(),
+        complete,
     }))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Manifest w kształcie tego, co zapisuje nudl, plus pliki, które opisuje.
+    fn firmware(directory: &Path, files: &[(&str, u64)]) -> PathBuf {
+        let mut text = "+|23167|NE1.ERT.001|HM|New_IONIQ5_EUR|1752|1\n".to_owned();
+
+        for (name, size) in files {
+            text.push_str(&format!("New_IONIQ5_EUR|{name}|1|0|{size}|1\n"));
+            std::fs::write(directory.join(name), vec![0u8; *size as usize]).unwrap();
+        }
+
+        let path = directory.join("New_IONIQ5_EUR.ver");
+        std::fs::write(&path, text).unwrap();
+
+        path
+    }
+
+    #[test]
+    fn a_directory_holding_every_file_reads_as_complete() {
+        let dir = tempfile::tempdir().unwrap();
+        firmware(dir.path(), &[("pierwszy.enc", 64), ("drugi.enc", 32)]);
+
+        let installed = read_installed(dir.path()).unwrap().unwrap();
+
+        assert_eq!(installed.model_id, "New_IONIQ5_EUR");
+        assert_eq!(installed.firmware_version, "NE1.ERT.001");
+        assert!(installed.complete);
+    }
+
+    /// Pobieranie zapisuje manifest, zanim ściągnie choćby bajt, więc sam
+    /// manifest nie może uchodzić za dowód kompletu.
+    #[test]
+    fn an_interrupted_download_is_not_complete() {
+        let dir = tempfile::tempdir().unwrap();
+        firmware(dir.path(), &[("pierwszy.enc", 64), ("drugi.enc", 32)]);
+        std::fs::remove_file(dir.path().join("drugi.enc")).unwrap();
+
+        assert!(!read_installed(dir.path()).unwrap().unwrap().complete);
+    }
+
+    /// Plik obcięty w połowie zapisu waży mniej, niż mówi manifest.
+    #[test]
+    fn a_half_written_file_is_not_complete() {
+        let dir = tempfile::tempdir().unwrap();
+        firmware(dir.path(), &[("pierwszy.enc", 64)]);
+        std::fs::write(dir.path().join("pierwszy.enc"), b"za krotki").unwrap();
+
+        assert!(!read_installed(dir.path()).unwrap().unwrap().complete);
+    }
 
     fn usb() -> DriveFacts {
         DriveFacts {
