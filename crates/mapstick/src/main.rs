@@ -1330,6 +1330,20 @@ impl Worker {
     }
 
     async fn refresh_media(&mut self) {
+        self.reread_media(true).await;
+    }
+
+    /// Odczytuje nośniki na nowo, nie odzywając się na pasku stanu.
+    ///
+    /// Po pobraniu albo skopiowaniu wolnego miejsca jest o dziesiątki gigabajtów
+    /// mniej, a wiersz nośnika dalej pokazywałby odczyt sprzed zapisu. Meldunek
+    /// o liczbie nośników zabrałby przy tym miejsce wiadomości o tym, co się
+    /// właśnie skończyło.
+    async fn refresh_space(&mut self) {
+        self.reread_media(false).await;
+    }
+
+    async fn reread_media(&mut self, announce: bool) {
         self.with_ui(|ui| ui.set_media_busy(true));
 
         match mapstick_media::list_media().await {
@@ -1340,12 +1354,16 @@ impl Worker {
                 self.push_media_rows();
 
                 if count == 0 {
-                    self.set_status(
-                        "Nie znaleziono nośnika wymiennego. Dyski wewnętrzne i systemowe są pomijane.",
-                        false,
-                    );
+                    if announce {
+                        self.set_status(
+                            "Nie znaleziono nośnika wymiennego. Dyski wewnętrzne i systemowe są pomijane.",
+                            false,
+                        );
+                    }
                 } else {
-                    self.set_status(format!("Znaleziono nośników: {count}."), false);
+                    if announce {
+                        self.set_status(format!("Znaleziono nośników: {count}."), false);
+                    }
 
                     // Jeden podłączony nośnik to jedyny sensowny cel. Bez tego
                     // „Pobierz” zostaje wyszarzony, a jedyną podpowiedzią jest
@@ -2344,7 +2362,10 @@ impl Worker {
                 Cmd::FavouritesRefreshed(versions) => self.apply_favourite_versions(versions),
                 Cmd::OpenLink(url) => self.open_link(url).await,
                 Cmd::LinksCollected(found) => self.apply_links(found),
-                Cmd::DownloadFinished(record) => self.record_download(*record),
+                Cmd::DownloadFinished(record) => {
+                    self.record_download(*record);
+                    self.refresh_space().await;
+                }
                 Cmd::StartCopy => {
                     if let Err(e) = self.start_copy() {
                         self.copy_cancel = None;
@@ -2361,7 +2382,7 @@ impl Worker {
                         self.save_store();
                     }
 
-                    self.push_target_state();
+                    self.refresh_space().await;
                 }
                 Cmd::GoToMedia => {
                     let summary = match (&self.selected, self.required_bytes()) {
