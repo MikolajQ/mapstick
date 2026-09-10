@@ -242,6 +242,7 @@ export component AppWindow inherits Window {
     callback start-copy();
     callback set-delete-after-copy(bool);
     callback cancel-download();
+    callback abandon-download();
     callback set-direct-mode(bool);
     callback clear-cache();
     callback toggle-favourite();
@@ -675,7 +676,23 @@ export component AppWindow inherits Window {
                             enabled: root.output-dir != "" && !root.formatting;
                             clicked => { root.request-redownload(); }
                         }
-                        if root.downloading || root.copying: Button {
+                        // Dwa różne zamiary, dwa przyciski. Wstrzymanie
+                        // zostawia archiwa, żeby było co wznowić; anulowanie
+                        // sprząta po sobie — dziesiątki gigabajtów nie mogą
+                        // zostawać przypadkiem.
+                        if root.downloading: Button {
+                            width: 190px;
+                            height: 42px;
+                            text: "Wstrzymaj";
+                            clicked => { root.cancel-download(); }
+                        }
+                        if root.downloading: Button {
+                            width: 150px;
+                            height: 42px;
+                            text: "Anuluj i posprzątaj";
+                            clicked => { root.abandon-download(); }
+                        }
+                        if root.copying: Button {
                             width: 190px;
                             height: 42px;
                             text: "Anuluj";

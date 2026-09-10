@@ -76,6 +76,8 @@ enum Cmd {
     Select(usize),
     StartDownload,
     Cancel,
+    /// Przerwanie razem ze sprzątnięciem tego, co zdążyło się pobrać.
+    Abandon,
     SetDirectMode(bool),
     ClearCache,
     GoToMedia,
@@ -102,6 +104,19 @@ enum Cmd {
     /// Kopiowanie dobiegło końca — także przerwane albo nieudane.
     /// `forget` niesie model, którego dane zniknęły z dysku.
     CopyEnded { forget: Option<String> },
+}
+
+/// Ślad trwającego pobrania: co po nim usunąć, jeśli zostanie anulowane.
+///
+/// Zbieramy to w chwili startu, bo w chwili anulowania użytkownik może już
+/// oglądać inny model albo inny katalog.
+#[derive(Debug, Clone)]
+struct Footprint {
+    model_id: String,
+    output: PathBuf,
+    /// Katalog archiwów. Przy pobieraniu prosto na nośnik nie ma osobnego —
+    /// archiwa leżą wtedy w katalogu docelowym.
+    work: Option<PathBuf>,
 }
 
 /// Czym skończyło się zadanie kopiujące.
@@ -163,6 +178,42 @@ fn brand_index(name: &str) -> usize {
 
 fn region_index(code: &str) -> usize {
     REGIONS.iter().position(|(c, _)| *c == code).unwrap_or(0)
+}
+
+/// Usuwa niedokończone archiwa leżące w katalogu docelowym.
+///
+/// Przy pobieraniu prosto na nośnik nie ma osobnego katalogu na archiwa, więc
+/// zostają tam, gdzie trafił wynik. Rozpoznajemy je po rozszerzeniach, których
+/// nie nadaje nic poza samym pobieraniem.
+fn remove_partial_archives(directory: &Path) -> u64 {
+    const PARTIAL: &[&str] = &["nudl_download", "nudl_verify"];
+
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return 0;
+    };
+
+    let mut freed = 0;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+
+        let partial = path
+            .extension()
+            .is_some_and(|e| PARTIAL.iter().any(|p| e.eq_ignore_ascii_case(p)));
+
+        if !partial || !entry.file_type().is_ok_and(|t| t.is_file()) {
+            continue;
+        }
+
+        let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+
+        match std::fs::remove_file(&path) {
+            Ok(()) => freed += size,
+            Err(e) => tracing::warn!("Nie udało się usunąć {}: {e}", path.display()),
+        }
+    }
+
+    freed
 }
 
 /// Ile bajtów poleci przez sieć i ile zajmie na nośniku.
@@ -253,6 +304,7 @@ struct Worker {
     /// zmieniają się przy każdym odświeżeniu, a wybór ma przeżyć wskazanie
     /// katalogu na dysku twardym.
     chosen_medium: Option<PathBuf>,
+    running: Option<Footprint>,
     download: Option<JoinHandle<()>>,
     media: Vec<Medium>,
     pending_format: Option<usize>,
@@ -287,6 +339,7 @@ impl Worker {
             firmware: None,
             output_dir: None,
             chosen_medium: None,
+            running: None,
             download: None,
             media: Vec::new(),
             pending_format: None,
@@ -1525,6 +1578,12 @@ impl Worker {
         let work = cache::for_download(&car.id, &record.version);
         let cleanup = (!self.direct_to_medium).then(|| work.clone());
 
+        self.running = Some(Footprint {
+            model_id: car.id.clone(),
+            output: output.clone(),
+            work: cleanup.clone(),
+        });
+
         let (downloader, mut progress_rx) = if self.direct_to_medium {
             Downloader::new(out_dir, client, car, firmware, CONCURRENCY, RETRIES, false)
         } else {
@@ -1888,9 +1947,88 @@ impl Worker {
 
         self.with_ui(|ui| {
             ui.set_downloading(false);
-            ui.set_status("Pobieranie przerwane. Ponowne uruchomienie wznowi je.".into());
+            ui.set_status(
+                "Pobieranie wstrzymane. Kliknij „Pobierz”, żeby je wznowić od tego miejsca."
+                    .into(),
+            );
             ui.set_status_is_error(false);
         });
+    }
+
+    /// Przerywa pobieranie i usuwa to, co zdążyło po nim zostać.
+    ///
+    /// W odróżnieniu od wstrzymania nie ma po tym czego wznawiać — i o to
+    /// chodzi: „anuluj” ma nie zostawiać na dysku dziesiątek gigabajtów,
+    /// o których za pół roku nikt nie będzie pamiętał, skąd się wzięły.
+    async fn abandon(&mut self) {
+        // Najpierw niech zadanie naprawdę stanie. Kasowanie plików spod ręki
+        // piszącego wątku zostawiłoby połowę z nich odtworzonych.
+        if let Some(handle) = self.download.take() {
+            handle.abort();
+            let _ = handle.await;
+        }
+
+        let Some(footprint) = self.running.take() else {
+            self.cancel();
+            return;
+        };
+
+        let mut freed = 0u64;
+
+        if let Some(work) = &footprint.work {
+            freed += cache::directory_size(work);
+
+            if let Err(e) = std::fs::remove_dir_all(work)
+                && e.kind() != std::io::ErrorKind::NotFound
+            {
+                tracing::warn!("Nie udało się usunąć {}: {e}", work.display());
+            }
+
+            // Katalog modelu bez żadnej wersji w środku nie ma po co zostawać.
+            if let Some(model) = work.parent()
+                && std::fs::read_dir(model).is_ok_and(|mut d| d.next().is_none())
+            {
+                let _ = std::fs::remove_dir(model);
+            }
+        }
+
+        freed += remove_partial_archives(&footprint.output);
+
+        // Manifest powstaje na początku pobierania, więc po anulowaniu opisuje
+        // wydanie, którego tam nie ma. Usuwamy i jego, i to, co wymienia.
+        let doomed = stale::find(&footprint.output, &footprint.model_id, &HashSet::new());
+        freed += doomed.bytes;
+        stale::remove(&footprint.output, &doomed);
+
+        let manifest = footprint
+            .output
+            .join(format!("{}.ver", footprint.model_id));
+        if let Err(e) = std::fs::remove_file(&manifest)
+            && e.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::warn!("Nie udało się usunąć {}: {e}", manifest.display());
+        }
+
+        tracing::info!(
+            "Pobranie {} anulowane, odzyskane {freed} B",
+            footprint.model_id
+        );
+
+        self.with_ui(|ui| {
+            ui.set_downloading(false);
+            ui.set_progress(0.0);
+            ui.set_progress_text(String::new().into());
+        });
+
+        self.push_target_state();
+        self.push_leftovers();
+        self.set_status(
+            format!(
+                "Pobieranie anulowane — usunięte pozostałości: {}.",
+                format_size(freed)
+            ),
+            false,
+        );
     }
 
     /// Odtwarza stan po uruchomieniu: ulubione, ich wersje i ostatni model.
@@ -2152,6 +2290,7 @@ impl Worker {
                     }
                 }
                 Cmd::Cancel => self.cancel(),
+                Cmd::Abandon => self.abandon().await,
                 Cmd::SetDirectMode(direct) => {
                     self.direct_to_medium = direct;
                     self.push_space_note();
@@ -2328,6 +2467,18 @@ fn main() -> Result<()> {
                 let _ = tx.send(Cmd::StartDownload);
             }
 
+            // MAPSTICK_DEV_ANULUJ=<sekundy> anuluje je po chwili — inaczej
+            // sprzątania po anulowaniu nie da się sprawdzić bez myszy.
+            if let Ok(after) = std::env::var("MAPSTICK_DEV_ANULUJ")
+                && let Ok(seconds) = after.parse::<u64>()
+            {
+                let t = tx.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_secs(seconds));
+                    let _ = t.send(Cmd::Abandon);
+                });
+            }
+
             if let Ok(mode) = std::env::var("MAPSTICK_DEV_KOPIUJ").as_deref() {
                 let _ = tx.send(Cmd::SetDeleteAfterCopy(mode == "przenies"));
                 let _ = tx.send(Cmd::StartCopy);
@@ -2423,6 +2574,11 @@ fn wire_callbacks(ui: &AppWindow, tx: UnboundedSender<Cmd>) {
     let t = tx.clone();
     ui.on_set_delete_after_copy(move |delete| {
         let _ = t.send(Cmd::SetDeleteAfterCopy(delete));
+    });
+
+    let t = tx.clone();
+    ui.on_abandon_download(move || {
+        let _ = t.send(Cmd::Abandon);
     });
 
     let t = tx.clone();
