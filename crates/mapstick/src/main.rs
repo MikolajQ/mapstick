@@ -87,6 +87,9 @@ enum Cmd {
     RemoveStale(usize),
     ConfirmFormat,
     CancelFormat,
+    RequestRedownload,
+    ConfirmRedownload,
+    CancelRedownload,
     FavouritesRefreshed(Vec<FavouriteVersion>),
     DownloadFinished(Box<Download>),
     StartCopy,
@@ -926,6 +929,87 @@ impl Worker {
             ),
             false,
         );
+    }
+
+    /// Wszystko, co opisuje manifest w katalogu docelowym.
+    ///
+    /// W odróżnieniu od [`Worker::stale_on_target`] nic nie oszczędzamy:
+    /// pobieranie uznaje każdy zastany plik wynikowy za gotowy (sprawdza samo
+    /// istnienie, nie sumę kontrolną), więc ponowne pobranie do pełnego
+    /// katalogu nie pobrałoby ani bajtu.
+    fn everything_on_target(&self) -> Option<(PathBuf, String, stale::Stale)> {
+        let target = self.output_dir.clone()?;
+        let model_id = self.entries.get(self.selected?)?.car.id.clone();
+        let found = stale::find(&target, &model_id, &HashSet::new());
+
+        Some((target, model_id, found))
+    }
+
+    /// Pyta, zanim skasuje gotowe pliki, żeby pobrać je jeszcze raz.
+    fn request_redownload(&mut self) {
+        let Some((target, _, doomed)) = self.everything_on_target() else {
+            return;
+        };
+
+        let summary = format!(
+            "{}\nDo usunięcia: {} plików, {}",
+            target.display(),
+            doomed.paths.len(),
+            format_size(doomed.bytes)
+        );
+
+        self.with_ui(move |ui| {
+            ui.set_redownload_target(summary.into());
+            ui.set_redownload_dialog(true);
+        });
+    }
+
+    /// Usuwa poprzednie pobranie i zaczyna je od nowa.
+    ///
+    /// Archiwów w pamięci podręcznej nie ruszamy: po udanym pobraniu i tak ich
+    /// nie ma, a gdy zostały, to po pobraniu przerwanym — i wtedy są dokładnie
+    /// tym, czego potrzeba, żeby nie ciągnąć wszystkiego drugi raz.
+    fn confirm_redownload(&mut self) {
+        self.with_ui(|ui| ui.set_redownload_dialog(false));
+
+        let Some((target, model_id, doomed)) = self.everything_on_target() else {
+            return;
+        };
+
+        let bytes = doomed.bytes;
+        let removed = stale::remove(&target, &doomed);
+
+        // Manifest nie należy do plików, które wymienia, a to on decyduje
+        // o zdaniu „leży już bieżąca wersja”. Zostawiony kazałby aplikacji
+        // twierdzić, że wszystko jest na miejscu, gdy nie ma już niczego.
+        let manifest = target.join(format!("{model_id}.ver"));
+        if let Err(e) = std::fs::remove_file(&manifest)
+            && e.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::warn!("Nie udało się usunąć {}: {e}", manifest.display());
+        }
+
+        // Wpis o gotowym pobraniu opisywał to, co przed chwilą skasowaliśmy.
+        if self
+            .store
+            .download_for(&model_id)
+            .is_some_and(|d| d.path == target)
+        {
+            self.store.forget_download(&model_id);
+            self.save_store();
+        }
+
+        tracing::info!(
+            "Ponowne pobranie {model_id}: usunięto {removed} plików ({bytes} B) z {}",
+            target.display()
+        );
+
+        self.push_target_state();
+        self.push_space_note();
+
+        if let Err(e) = self.start_download() {
+            self.set_status(e.to_string(), true);
+        }
     }
 
     /// Kasuje archiwa, które nie mogą się już przydać.
@@ -2045,6 +2129,11 @@ impl Worker {
                     self.pending_format = None;
                     self.with_ui(|ui| ui.set_format_dialog(false));
                 }
+                Cmd::RequestRedownload => self.request_redownload(),
+                Cmd::ConfirmRedownload => self.confirm_redownload(),
+                Cmd::CancelRedownload => {
+                    self.with_ui(|ui| ui.set_redownload_dialog(false));
+                }
             }
         }
     }
@@ -2144,6 +2233,14 @@ fn main() -> Result<()> {
                 let _ = tx.send(Cmd::SetDeleteAfterCopy(mode == "przenies"));
                 let _ = tx.send(Cmd::StartCopy);
             }
+
+            // MAPSTICK_DEV_PONOWNIE przechodzi całą drogę „Pobierz ponownie”
+            // razem z potwierdzeniem — okna dialogowego nie ma jak kliknąć
+            // bez myszy.
+            if std::env::var_os("MAPSTICK_DEV_PONOWNIE").is_some() {
+                let _ = tx.send(Cmd::RequestRedownload);
+                let _ = tx.send(Cmd::ConfirmRedownload);
+            }
         }
     }
 
@@ -2238,6 +2335,21 @@ fn wire_callbacks(ui: &AppWindow, tx: UnboundedSender<Cmd>) {
     let t = tx.clone();
     ui.on_confirm_format(move || {
         let _ = t.send(Cmd::ConfirmFormat);
+    });
+
+    let t = tx.clone();
+    ui.on_request_redownload(move || {
+        let _ = t.send(Cmd::RequestRedownload);
+    });
+
+    let t = tx.clone();
+    ui.on_confirm_redownload(move || {
+        let _ = t.send(Cmd::ConfirmRedownload);
+    });
+
+    let t = tx.clone();
+    ui.on_cancel_redownload(move || {
+        let _ = t.send(Cmd::CancelRedownload);
     });
 
     let t = tx.clone();

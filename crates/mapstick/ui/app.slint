@@ -216,6 +216,11 @@ export component AppWindow inherits Window {
     in property <string> format-target;
     in property <bool> formatting: false;
 
+    // --- potwierdzenie ponownego pobrania ---
+    in property <bool> redownload-dialog: false;
+    /// Co zniknie z katalogu docelowego: ile plików i ile miejsca.
+    in property <string> redownload-target;
+
     callback load-models(int, int);
     callback filter-changed(string);
     callback select-row(int);
@@ -228,6 +233,9 @@ export component AppWindow inherits Window {
     callback remove-stale(int);
     callback confirm-format();
     callback cancel-format();
+    callback request-redownload();
+    callback confirm-redownload();
+    callback cancel-redownload();
     callback start-download();
     callback start-copy();
     callback set-delete-after-copy(bool);
@@ -632,23 +640,35 @@ export component AppWindow inherits Window {
                     HorizontalLayout {
                         spacing: 14px;
 
-                        if !root.downloading && !root.copying && root.copy-source != "": Button {
+                        if !root.downloading && !root.copying && !root.target-has-current
+                                && root.copy-source != "": Button {
                             width: 190px;
                             height: 42px;
                             text: "Skopiuj na nośnik";
                             primary: true;
-                            enabled: root.output-dir != "" && !root.formatting
-                                && !root.target-has-current;
+                            enabled: root.output-dir != "" && !root.formatting;
                             clicked => { root.start-copy(); }
                         }
-                        if !root.downloading && !root.copying && root.copy-source == "": Button {
+                        if !root.downloading && !root.copying && !root.target-has-current
+                                && root.copy-source == "": Button {
                             width: 190px;
                             height: 42px;
                             text: "Pobierz";
                             primary: true;
-                            enabled: root.output-dir != "" && !root.formatting
-                                && !root.target-has-current;
+                            enabled: root.output-dir != "" && !root.formatting;
                             clicked => { root.start-download(); }
+                        }
+                        // Wszystko już jest na miejscu, więc nie ma czego
+                        // proponować — ale wyszarzony przycisk zostawiałby
+                        // uszkodzone pobranie bez żadnego wyjścia. Stąd droga
+                        // powrotna, bez wyróżnienia: rzadko się jej chce.
+                        if !root.downloading && !root.copying
+                                && root.target-has-current: Button {
+                            width: 190px;
+                            height: 42px;
+                            text: "Pobierz ponownie";
+                            enabled: root.output-dir != "" && !root.formatting;
+                            clicked => { root.request-redownload(); }
                         }
                         if root.downloading || root.copying: Button {
                             width: 190px;
@@ -768,6 +788,63 @@ export component AppWindow inherits Window {
             font-size: 12px;
             color: root.status-is-error ? #d05050 : #808080;
             overflow: elide;
+        }
+    }
+
+    // ============== POTWIERDZENIE PONOWNEGO POBRANIA ==============
+    if root.redownload-dialog: Rectangle {
+        background: #000000bb;
+
+        TouchArea {}
+
+        Rectangle {
+            width: 520px;
+            height: 280px;
+            background: #2b2b2b;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: #c07830;
+
+            VerticalLayout {
+                padding: 22px;
+                spacing: 12px;
+
+                Text {
+                    text: "Pobrać to samo jeszcze raz?";
+                    font-size: 19px;
+                    font-weight: 700;
+                    color: #f0f0f0;
+                }
+
+                Text {
+                    text: root.redownload-target;
+                    font-size: 13px;
+                    font-family: "monospace";
+                    color: #e0c090;
+                    wrap: word-wrap;
+                }
+
+                Text {
+                    text: "Pobieranie pomija pliki, które już są, więc najpierw trzeba je usunąć. Skasujemy wyłącznie to, co wymienia plik .ver tego modelu — niczego innego z tego miejsca nie ruszamy.";
+                    font-size: 13px;
+                    color: #c8c8c8;
+                    wrap: word-wrap;
+                    vertical-stretch: 1;
+                }
+
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: end;
+                    Button {
+                        text: "Anuluj";
+                        clicked => { root.cancel-redownload(); }
+                    }
+                    Button {
+                        text: "Usuń i pobierz";
+                        clicked => { root.confirm-redownload(); }
+                    }
+                }
+            }
         }
     }
 
