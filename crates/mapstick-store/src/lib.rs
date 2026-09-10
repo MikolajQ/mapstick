@@ -72,9 +72,62 @@ pub struct Favourite {
     /// Zapisywany wyłącznie za zgodą użytkownika.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vin: Option<String>,
+
+    /// Czy sprawdzać ten model w tle, bez uruchamiania aplikacji.
+    #[serde(default)]
+    pub watch: bool,
+    /// Wersja, o której już powiadomiliśmy. Bez tego to samo wydanie
+    /// przypominałoby o sobie przy każdym sprawdzeniu.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notified_version: Option<String>,
+}
+
+/// Jak często sprawdzać aktualizacje w tle.
+///
+/// Producent wydaje mapy kilka razy w roku, więc częściej niż raz na tydzień
+/// nie ma czego szukać — ale to wybór użytkownika, nie nasz.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Interval {
+    Daily,
+    #[default]
+    Weekly,
+    Monthly,
+}
+
+impl Interval {
+    pub const ALL: &'static [Interval] = &[Interval::Daily, Interval::Weekly, Interval::Monthly];
+
+    /// Postać, którą rozumie `OnCalendar=` systemd.
+    pub fn calendar(self) -> &'static str {
+        match self {
+            Interval::Daily => "daily",
+            Interval::Weekly => "weekly",
+            Interval::Monthly => "monthly",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Interval::Daily => "codziennie",
+            Interval::Weekly => "co tydzień",
+            Interval::Monthly => "co miesiąc",
+        }
+    }
 }
 
 impl Favourite {
+    /// Wersja, którą uznajemy za obecną w aucie.
+    ///
+    /// Potwierdzona ręcznie bije wszystko inne: tylko użytkownik wie, co auto
+    /// naprawdę połknęło. Dalej to, co odczytaliśmy z nośnika albo pobraliśmy
+    /// — lepsze niż nic, choć żadne z nich nie jest dowodem.
+    pub fn known_version(&self) -> Option<&str> {
+        self.installed_version
+            .as_deref()
+            .or(self.downloaded_version.as_deref())
+    }
+
     /// Czy producent wystawia coś nowszego niż to, co mamy.
     ///
     /// `None` znaczy „nie wiadomo” i tak też ma być pokazane — aplikacja nigdy
@@ -123,6 +176,9 @@ pub struct Store {
     /// Numer schematu, od pierwszego dnia — żeby późniejsza zmiana formatu nie
     /// wymagała zgadywania, co się czyta.
     pub version: u32,
+    /// Jak często pyta o nowe wydania sprawdzanie w tle.
+    #[serde(default)]
+    pub check_interval: Interval,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_selection: Option<LastSelection>,
     #[serde(default)]
@@ -135,6 +191,7 @@ impl Default for Store {
     fn default() -> Self {
         Self {
             version: 1,
+            check_interval: Interval::default(),
             last_selection: None,
             items: Vec::new(),
             downloads: Vec::new(),
@@ -143,6 +200,11 @@ impl Default for Store {
 }
 
 impl Store {
+    /// Modele, o które użytkownik prosił, żeby ich pilnować.
+    pub fn watched(&self) -> impl Iterator<Item = &Favourite> {
+        self.items.iter().filter(|f| f.watch)
+    }
+
     pub fn find(&self, model_id: &str) -> Option<&Favourite> {
         self.items.iter().find(|f| f.model_id == model_id)
     }
@@ -224,6 +286,41 @@ impl Store {
     }
 }
 
+/// Wyłączny dostęp do pliku ulubionych na czas odczytu i zapisu.
+///
+/// Sprawdzanie w tle i otwarte okno to dwa procesy piszące ten sam plik.
+/// Zapis jest całościowy (plik tymczasowy i podmiana), więc bez blokady jeden
+/// nadpisałby zmiany drugiego — i to akurat te, dla których sprawdzanie
+/// w ogóle się uruchomiło.
+pub struct Lock(std::fs::File);
+
+/// Bierze blokadę obok pliku ulubionych. Osobny plik, bo zapis podmienia sam
+/// plik ulubionych i blokada na nim zniknęłaby razem z podmienianym i-węzłem.
+pub fn lock(path: &Path) -> Result<Lock> {
+    let path = path.with_extension("lock");
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| Error::Write(parent.to_owned(), e))?;
+    }
+
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .map_err(|e| Error::Write(path.clone(), e))?;
+
+    fs4::fs_std::FileExt::lock_exclusive(&file).map_err(|e| Error::Write(path.clone(), e))?;
+
+    Ok(Lock(file))
+}
+
+impl Drop for Lock {
+    fn drop(&mut self) {
+        let _ = fs4::fs_std::FileExt::unlock(&self.0);
+    }
+}
+
 /// Znacznik czasu w formacie RFC 3339.
 pub fn now() -> String {
     jiff::Timestamp::now().to_string()
@@ -260,6 +357,8 @@ mod tests {
             installed_source: None,
             installed_confirmed: false,
             vin: None,
+            watch: false,
+            notified_version: None,
         }
     }
 

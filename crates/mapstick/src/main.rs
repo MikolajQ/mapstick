@@ -497,6 +497,10 @@ impl Worker {
                 installed_source: None,
                 installed_confirmed: false,
                 vin: None,
+                // Pilnowanie w tle włącza się osobnym polem — gwiazdka mówi
+                // „interesuje mnie ten model”, a nie „sprawdzaj go beze mnie”.
+                watch: false,
+                notified_version: None,
             });
             self.set_status(format!("{} dodany do ulubionych.", car.name), false);
 
