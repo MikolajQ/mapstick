@@ -1557,62 +1557,96 @@ impl Worker {
             let (mut pp_done, mut pp_total) = (0u64, 0u64);
             let mut last_paint = Instant::now() - UI_REFRESH;
 
+            // Prędkość liczona z przyrostów między odmalowaniami. Same
+            // przyrosty skaczą — pliki przychodzą kawałkami — więc pokazujemy
+            // średnią wykładniczą, która nadąża, ale nie miga.
+            let mut speed = 0f64;
+            let mut counted = 0u64;
+            let mut closed = false;
+
+            // Bez własnego tykania pasek stoi, gdy sieć milczy, i pokazuje
+            // prędkość sprzed zerwania połączenia.
+            let mut tick = tokio::time::interval(UI_REFRESH * 5);
+
             let result = loop {
                 tokio::select! {
                     r = &mut handle => break r,
-                    msg = progress_rx.recv() => {
-                        let Some(msg) = msg else { continue };
-
+                    _ = tick.tick() => {}
+                    msg = progress_rx.recv(), if !closed => {
                         match msg {
-                            ProgressMessage::TotalDownload(b) => dl_total = b,
-                            ProgressMessage::TotalPostProcess(b) => pp_total = b,
-                            ProgressMessage::Download(b) => dl_done += b,
-                            ProgressMessage::PostProcess(b) => pp_done += b,
+                            Some(ProgressMessage::TotalDownload(b)) => dl_total = b,
+                            Some(ProgressMessage::TotalPostProcess(b)) => pp_total = b,
+                            Some(ProgressMessage::Download(b)) => dl_done += b,
+                            Some(ProgressMessage::PostProcess(b)) => pp_done += b,
+                            None => closed = true,
                         }
-
-                        if last_paint.elapsed() < UI_REFRESH {
-                            continue;
-                        }
-                        last_paint = Instant::now();
-
-                        // Serwer bywa podaje zaniżone rozmiary, więc pasek
-                        // nigdy nie przekracza pełna.
-                        let (done, total) = if pp_total > 0 {
-                            (dl_done + pp_done, dl_total + pp_total)
-                        } else {
-                            (dl_done, dl_total)
-                        };
-                        let fraction = if total > 0 {
-                            (done as f32 / total as f32).min(1.0)
-                        } else {
-                            0.0
-                        };
-                        // Jedna liczba na dwie fazy myliła: „96,1 GiB” przy
-                        // 48,1 GiB do pobrania wygląda jak błąd, a jest sumą
-                        // ściągania i rozpakowywania. Pasek liczy całą robotę,
-                        // ale podpis nazywa każdą fazę z osobna.
-                        let text = if pp_total > 0 {
-                            format!(
-                                "Pobrano {} z {} · rozpakowano {} z {}",
-                                format_size(dl_done),
-                                format_size(dl_total),
-                                format_size(pp_done),
-                                format_size(pp_total)
-                            )
-                        } else {
-                            format!(
-                                "Pobrano {} z {}",
-                                format_size(dl_done),
-                                format_size(dl_total)
-                            )
-                        };
-
-                        let _ = ui.upgrade_in_event_loop(move |ui| {
-                            ui.set_progress(fraction);
-                            ui.set_progress_text(text.into());
-                        });
                     }
                 }
+
+                if last_paint.elapsed() < UI_REFRESH {
+                    continue;
+                }
+
+                let since = last_paint.elapsed().as_secs_f64();
+                last_paint = Instant::now();
+
+                let just_now = dl_done.saturating_sub(counted) as f64 / since;
+                counted = dl_done;
+                speed = if speed == 0.0 {
+                    just_now
+                } else {
+                    speed * 0.7 + just_now * 0.3
+                };
+
+                // Serwer bywa podaje zaniżone rozmiary, więc pasek
+                // nigdy nie przekracza pełna.
+                let (done, total) = if pp_total > 0 {
+                    (dl_done + pp_done, dl_total + pp_total)
+                } else {
+                    (dl_done, dl_total)
+                };
+                let fraction = if total > 0 {
+                    (done as f32 / total as f32).min(1.0)
+                } else {
+                    0.0
+                };
+
+                // Prędkość dotyczy sieci, więc znika, gdy zostało już tylko
+                // rozpakowywanie.
+                let rate = if dl_total > 0 && dl_done < dl_total && speed >= 1.0 {
+                    format!(" ({}/s)", format_size(speed as u64))
+                } else {
+                    String::new()
+                };
+
+                // Jedna liczba na dwie fazy myliła: „96,1 GiB” przy
+                // 48,1 GiB do pobrania wygląda jak błąd, a jest sumą
+                // ściągania i rozpakowywania. Pasek liczy całą robotę,
+                // ale podpis nazywa każdą fazę z osobna.
+                let text = if pp_total > 0 {
+                    format!(
+                        "Pobrano {} z {}{} · rozpakowano {} z {}",
+                        format_size(dl_done),
+                        format_size(dl_total),
+                        rate,
+                        format_size(pp_done),
+                        format_size(pp_total)
+                    )
+                } else {
+                    format!(
+                        "Pobrano {} z {}{}",
+                        format_size(dl_done),
+                        format_size(dl_total),
+                        rate
+                    )
+                };
+
+                tracing::debug!("pasek: {text}");
+
+                let _ = ui.upgrade_in_event_loop(move |ui| {
+                    ui.set_progress(fraction);
+                    ui.set_progress_text(text.into());
+                });
             };
 
             let succeeded = result.is_ok();
@@ -2193,8 +2227,14 @@ impl Worker {
 }
 
 fn main() -> Result<()> {
+    // Domyślnie INFO, ale RUST_LOG bierze górę — bez tego jedyną drogą do
+    // szczegółów (choćby postępu odmalowywanego dziesięć razy na sekundę)
+    // byłaby przebudowa aplikacji.
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
         .init();
 
     rustls::crypto::ring::default_provider()
@@ -2281,6 +2321,12 @@ fn main() -> Result<()> {
         // a MAPSTICK_DEV_KOPIUJ od razu uruchamia kopiowanie z dysku.
         if let Ok(target) = std::env::var("MAPSTICK_DEV_CEL") {
             let _ = tx.send(Cmd::UseDirectory(PathBuf::from(target)));
+
+            // MAPSTICK_DEV_POBIERZ rusza z pobieraniem od razu — inaczej
+            // paska postępu nie da się obejrzeć bez myszy.
+            if std::env::var_os("MAPSTICK_DEV_POBIERZ").is_some() {
+                let _ = tx.send(Cmd::StartDownload);
+            }
 
             if let Ok(mode) = std::env::var("MAPSTICK_DEV_KOPIUJ").as_deref() {
                 let _ = tx.send(Cmd::SetDeleteAfterCopy(mode == "przenies"));
