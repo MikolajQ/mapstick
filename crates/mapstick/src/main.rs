@@ -1587,7 +1587,25 @@ impl Worker {
                         } else {
                             0.0
                         };
-                        let text = format!("{} z {}", format_size(done), format_size(total));
+                        // Jedna liczba na dwie fazy myliła: „96,1 GiB” przy
+                        // 48,1 GiB do pobrania wygląda jak błąd, a jest sumą
+                        // ściągania i rozpakowywania. Pasek liczy całą robotę,
+                        // ale podpis nazywa każdą fazę z osobna.
+                        let text = if pp_total > 0 {
+                            format!(
+                                "Pobrano {} z {} · rozpakowano {} z {}",
+                                format_size(dl_done),
+                                format_size(dl_total),
+                                format_size(pp_done),
+                                format_size(pp_total)
+                            )
+                        } else {
+                            format!(
+                                "Pobrano {} z {}",
+                                format_size(dl_done),
+                                format_size(dl_total)
+                            )
+                        };
 
                         let _ = ui.upgrade_in_event_loop(move |ui| {
                             ui.set_progress(fraction);
