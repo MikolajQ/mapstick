@@ -1729,9 +1729,19 @@ impl Worker {
 
             let succeeded = result.is_ok();
 
-            let message = match result {
-                Ok(()) => "Pobieranie zakończone. Sumy kontrolne sprawdzone.".to_owned(),
-                Err(e) => format!("Pobieranie nie powiodło się: {e}"),
+            // `{e:#}` zamiast `{e}`: anyhow pokazuje inaczej samą wierzchnią
+            // warstwę („Failed to open directory: …”) i gubi powód, dla którego
+            // się nie udało. Meldunek idzie też do dziennika — wcześniej
+            // trafiał wyłącznie na pasek stanu i znikał razem z oknem.
+            let message = match &result {
+                Ok(()) => {
+                    tracing::info!("Pobieranie zakończone");
+                    "Pobieranie zakończone. Sumy kontrolne sprawdzone.".to_owned()
+                }
+                Err(e) => {
+                    tracing::warn!("Pobieranie nie powiodło się: {e:#}");
+                    format!("Pobieranie nie powiodło się: {e:#}")
+                }
             };
 
             // Sprzątamy tylko po powodzeniu — po błędzie archiwa są tym, co
