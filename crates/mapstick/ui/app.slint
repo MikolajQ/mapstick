@@ -188,6 +188,8 @@ export component AppWindow inherits Window {
     in-out property <int> installed-index: 0;
     /// Czym budzi nas system i jak często. Puste — nikt nas nie budzi.
     in property <string> watch-note;
+    /// Wyjaśnienie, skąd kilka numerów wersji przy jednym modelu.
+    in property <string> variants-note;
     in property <string> favourites-note;
 
     in property <int> selected-index: -1;
@@ -542,6 +544,18 @@ export component AppWindow inherits Window {
                                 model: root.installed-choices;
                                 current-index <=> root.installed-index;
                                 selected => { root.set-installed(self.current-index); }
+                            }
+                        }
+
+                        if root.selected-is-favourite && root.variants-note != "": Rectangle {
+                            height: variants.preferred-height;
+
+                            variants := Text {
+                                width: parent.width;
+                                text: root.variants-note;
+                                font-size: 11px;
+                                opacity: 0.7;
+                                wrap: word-wrap;
                             }
                         }
 

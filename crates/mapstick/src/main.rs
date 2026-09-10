@@ -504,8 +504,10 @@ impl Worker {
         self.installed_choices = choices;
 
         let note = self.watch_note();
+        let variants = self.variants_note();
 
         self.with_ui(move |ui| {
+            ui.set_variants_note(variants.into());
             ui.set_selected_is_favourite(is_favourite);
             ui.set_selected_watch(watch);
             ui.set_interval_index(interval);
@@ -543,7 +545,7 @@ impl Worker {
             }
 
             let hint = if seen_on_medium.as_deref() == Some(version) {
-                "  ·  odczytane z nośnika"
+                "  ·  zapisane w pliku .ver"
             } else if downloaded.as_deref() == Some(version) {
                 "  ·  to pobraliśmy"
             } else {
@@ -585,6 +587,27 @@ impl Worker {
             .unwrap_or(0);
 
         (labels, choices, chosen)
+    }
+
+    /// Zdanie o modelu wystawionym w kilku numerach naraz.
+    ///
+    /// Wygląda to jak wybór między starszą a nowszą wersją, a jest wyborem
+    /// głowicy — przy czym pliki i tak są te same. Bez tego zdania numer
+    /// wybiera się rzutem monetą.
+    fn variants_note(&self) -> String {
+        let Some(index) = self.selected else {
+            return String::new();
+        };
+
+        let versions = &self.entries[index].car.versions;
+        if versions.len() < 2 {
+            return String::new();
+        }
+
+        // Plik `.ver` nie rozstrzyga: producent zapisuje w nim zawsze pierwszy
+        // numer z listy, niezależnie od tego, którą głowicę ma auto.
+        "Ten model jest wystawiony w kilku odmianach zestawu multimedialnego          (np. ccNC i ccNC Lite). Pliki do pobrania są dla nich identyczne —          numer wybierz ten, który widzisz na ekranie auta."
+            .to_owned()
     }
 
     /// Zdanie o tym, kto i jak często nas budzi.
