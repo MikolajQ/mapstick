@@ -702,6 +702,10 @@ impl Worker {
         self.selected = Some(index);
         self.firmware = None;
 
+        // „Wznów” dotyczyło poprzedniego modelu — po zmianie wskazywałoby
+        // pobranie czegoś zupełnie innego.
+        self.forget_pause();
+
         let entry = &self.entries[index];
         let (name, id, version, media, released) = (
             entry.car.name.clone(),
@@ -1414,6 +1418,8 @@ impl Worker {
             return;
         };
 
+        self.forget_pause();
+
         let shown = mount.display().to_string();
         self.chosen_medium = Some(mount.clone());
         self.output_dir = Some(mount);
@@ -1520,12 +1526,24 @@ impl Worker {
         }
     }
 
+    /// Kończy stan wstrzymania, gdy „Wznów” przestało cokolwiek znaczyć.
+    ///
+    /// Archiwów przy tym nie ruszamy: wznowienie po powrocie do tego samego
+    /// modelu dalej ma z czego skorzystać, a niepotrzebne sprzątnie
+    /// [`cache::sweep`], gdy producent wystawi nowszą wersję.
+    fn forget_pause(&mut self) {
+        self.running = None;
+        self.with_ui(|ui| ui.set_paused(false));
+    }
+
     /// Przyjmuje wskazany katalog jako cel.
     ///
     /// Przychodzi tu wynik okna wyboru — i to samo robi `MAPSTICK_DEV_CEL`
     /// przy testach na maszynie bez myszy.
     fn use_directory(&mut self, path: PathBuf) {
         tracing::info!("Cel wskazany ręcznie: {}", path.display());
+
+        self.forget_pause();
 
         let shown = path.display().to_string();
         self.output_dir = Some(path);
@@ -1604,6 +1622,7 @@ impl Worker {
 
         let _ = ui.upgrade_in_event_loop(|ui| {
             ui.set_downloading(true);
+            ui.set_paused(false);
             ui.set_progress(0.0);
             ui.set_progress_text("Rozpoczynanie…".into());
         });
@@ -1757,6 +1776,9 @@ impl Worker {
 
             let _ = ui.upgrade_in_event_loop(move |ui| {
                 ui.set_downloading(false);
+                // Po nieudanym pobraniu zostaje dokładnie to samo, co po
+                // wstrzymanym: archiwa do wznowienia albo do sprzątnięcia.
+                ui.set_paused(!succeeded);
                 ui.set_status(message.into());
                 ui.set_status_is_error(!succeeded);
                 ui.set_leftovers(leftovers.into());
@@ -1933,6 +1955,8 @@ impl Worker {
     /// Przerwanie polega na porzuceniu przyszłości pobierania — nudl zapisuje
     /// postęp na bieżąco, więc wznowienie sprowadza się do ponownego startu.
     fn cancel(&mut self) {
+        tracing::info!("Wstrzymane na życzenie");
+
         // Kopiowanie jest blokujące — `abort()` by go nie zatrzymał, więc
         // podnosimy flagę i czekamy, aż zauważy ją sama pętla kopiująca.
         if let Some(flag) = self.copy_cancel.take() {
@@ -1947,8 +1971,9 @@ impl Worker {
 
         self.with_ui(|ui| {
             ui.set_downloading(false);
+            ui.set_paused(true);
             ui.set_status(
-                "Pobieranie wstrzymane. Kliknij „Pobierz”, żeby je wznowić od tego miejsca."
+                "Pobieranie wstrzymane. Kliknij „Wznów”, żeby wrócić do tego miejsca."
                     .into(),
             );
             ui.set_status_is_error(false);
@@ -1961,6 +1986,7 @@ impl Worker {
     /// chodzi: „anuluj” ma nie zostawiać na dysku dziesiątek gigabajtów,
     /// o których za pół roku nikt nie będzie pamiętał, skąd się wzięły.
     async fn abandon(&mut self) {
+
         // Najpierw niech zadanie naprawdę stanie. Kasowanie plików spod ręki
         // piszącego wątku zostawiłoby połowę z nich odtworzonych.
         if let Some(handle) = self.download.take() {
@@ -2016,6 +2042,7 @@ impl Worker {
 
         self.with_ui(|ui| {
             ui.set_downloading(false);
+            ui.set_paused(false);
             ui.set_progress(0.0);
             ui.set_progress_text(String::new().into());
         });
@@ -2465,6 +2492,19 @@ fn main() -> Result<()> {
             // paska postępu nie da się obejrzeć bez myszy.
             if std::env::var_os("MAPSTICK_DEV_POBIERZ").is_some() {
                 let _ = tx.send(Cmd::StartDownload);
+            }
+
+            // MAPSTICK_DEV_WSTRZYMAJ=<sekundy> wstrzymuje pobieranie, tak jak
+            // przycisk; razem z MAPSTICK_DEV_ANULUJ pozwala sprawdzić
+            // sprzątanie z poziomu wstrzymania.
+            if let Ok(after) = std::env::var("MAPSTICK_DEV_WSTRZYMAJ")
+                && let Ok(seconds) = after.parse::<u64>()
+            {
+                let t = tx.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_secs(seconds));
+                    let _ = t.send(Cmd::Cancel);
+                });
             }
 
             // MAPSTICK_DEV_ANULUJ=<sekundy> anuluje je po chwili — inaczej

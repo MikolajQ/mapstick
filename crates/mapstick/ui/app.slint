@@ -210,6 +210,8 @@ export component AppWindow inherits Window {
     in property <bool> delete-after-copy: false;
     in property <bool> copying: false;
     in property <bool> downloading: false;
+    /// Pobieranie stoi, ale jest co wznowić — archiwa leżą na dysku.
+    in property <bool> paused: false;
     in property <float> progress: 0;
     in property <string> progress-text;
 
@@ -643,7 +645,24 @@ export component AppWindow inherits Window {
                     HorizontalLayout {
                         spacing: 14px;
 
-                        if !root.downloading && !root.copying
+                        // Wstrzymane pobieranie ma własną parę wyjść: wrócić
+                        // do niego albo zamknąć sprawę razem z archiwami.
+                        if root.paused && !root.downloading && !root.copying: Button {
+                            width: 190px;
+                            height: 42px;
+                            text: "Wznów";
+                            primary: true;
+                            enabled: root.output-dir != "" && !root.formatting;
+                            clicked => { root.start-download(); }
+                        }
+                        if root.paused && !root.downloading && !root.copying: Button {
+                            width: 150px;
+                            height: 42px;
+                            text: "Anuluj i posprzątaj";
+                            clicked => { root.abandon-download(); }
+                        }
+
+                        if !root.paused && !root.downloading && !root.copying
                                 && root.copy-source != "" && root.copy-target != "": Button {
                             width: 190px;
                             height: 42px;
@@ -655,7 +674,7 @@ export component AppWindow inherits Window {
                         // Pobranie zostaje w zasięgu ręki nawet wtedy, gdy te
                         // same dane leżą już na dysku twardym: kopiowanie jest
                         // tańsze, ale to użytkownik decyduje, czego chce.
-                        if !root.downloading && !root.copying
+                        if !root.paused && !root.downloading && !root.copying
                                 && !root.target-has-current: Button {
                             width: 190px;
                             height: 42px;
@@ -668,7 +687,7 @@ export component AppWindow inherits Window {
                         // proponować — ale wyszarzony przycisk zostawiałby
                         // uszkodzone pobranie bez żadnego wyjścia. Stąd droga
                         // powrotna, bez wyróżnienia: rzadko się jej chce.
-                        if !root.downloading && !root.copying
+                        if !root.paused && !root.downloading && !root.copying
                                 && root.target-has-current: Button {
                             width: 190px;
                             height: 42px;
