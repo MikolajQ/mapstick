@@ -1291,10 +1291,46 @@ impl Worker {
 
         match result {
             Ok(()) => {
+                self.forget_formatted(&medium);
                 self.set_status(format!("{} sformatowany do exFAT.", medium.id), false);
                 self.refresh_media().await;
             }
             Err(e) => self.set_status(format!("Formatowanie nie powiodło się: {e}"), true),
+        }
+    }
+
+    /// Zapomina wszystko, co aplikacja wiedziała o sformatowanym nośniku.
+    ///
+    /// Po formatowaniu nie ma tam ani plików, ani nawet dawnego punktu
+    /// montowania — nazwa katalogu bierze się z etykiety, a tę właśnie
+    /// zmieniliśmy. Cel zostaje pusty i wypełni go odświeżenie listy nośników.
+    fn forget_formatted(&mut self, medium: &Medium) {
+        let Some(mount) = medium.mount_point.clone() else {
+            return;
+        };
+
+        if self
+            .output_dir
+            .as_deref()
+            .is_some_and(|d| d.starts_with(&mount))
+        {
+            self.output_dir = None;
+            self.with_ui(|ui| ui.set_output_dir(String::new().into()));
+        }
+
+        let wiped: Vec<String> = self
+            .store
+            .downloads
+            .iter()
+            .filter(|d| d.path.starts_with(&mount))
+            .map(|d| d.model_id.clone())
+            .collect();
+
+        if !wiped.is_empty() {
+            for model_id in wiped {
+                self.store.forget_download(&model_id);
+            }
+            self.save_store();
         }
     }
 

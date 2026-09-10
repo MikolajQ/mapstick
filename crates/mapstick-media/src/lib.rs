@@ -33,6 +33,11 @@ pub enum Error {
     SystemDisk(String),
     #[error("Błąd komunikacji z usługą dysków")]
     Backend(#[source] Box<dyn std::error::Error + Send + Sync>),
+    /// Usługa odpowiedziała, ale odmówiła wykonania — z własnym uzasadnieniem.
+    /// Pokazujemy je wprost: „Device or resource busy” mówi użytkownikowi
+    /// więcej niż cokolwiek, co moglibyśmy wymyślić w zastępstwie.
+    #[error("Usługa dysków odmówiła: {0}")]
+    Service(String),
     #[error("Ta platforma nie jest jeszcze obsługiwana")]
     Unsupported,
 }

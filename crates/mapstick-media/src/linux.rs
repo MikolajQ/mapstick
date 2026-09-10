@@ -38,6 +38,34 @@ trait Block {
     ) -> zbus::Result<()>;
 }
 
+#[zbus::proxy(
+    interface = "org.freedesktop.UDisks2.Filesystem",
+    default_service = "org.freedesktop.UDisks2"
+)]
+trait Filesystem {
+    fn mount(&self, options: HashMap<&str, &zbus::zvariant::Value<'_>>) -> zbus::Result<String>;
+    fn unmount(&self, options: HashMap<&str, &zbus::zvariant::Value<'_>>) -> zbus::Result<()>;
+}
+
+/// Błąd, który usługa odesłała razem z uzasadnieniem, przekazujemy dalej
+/// w całości. Nazwa błędu D-Bus (`org.freedesktop.UDisks2.Error.Failed`)
+/// nikomu nic nie mówi, ale treść — owszem.
+fn service<E: Into<zbus::Error>>(e: E) -> Error {
+    match e.into() {
+        zbus::Error::MethodError(_, Some(message), _) => Error::Service(message),
+        other => backend(other),
+    }
+}
+
+/// Ścieżka obiektu udisks2 odpowiadająca urządzeniu blokowemu.
+fn block_path(id: &str) -> Result<OwnedObjectPath> {
+    OwnedObjectPath::try_from(format!(
+        "/org/freedesktop/UDisks2/block_devices/{}",
+        id.rsplit('/').next().unwrap_or_default().replace('-', "_2d")
+    ))
+    .map_err(backend)
+}
+
 fn backend<E>(e: E) -> Error
 where
     E: std::error::Error + Send + Sync + 'static,
@@ -219,16 +247,19 @@ pub async fn format_exfat(medium: &Medium, label: &str) -> Result<()> {
     }
 
     let connection = Connection::system().await.map_err(backend)?;
-    let path = OwnedObjectPath::try_from(format!(
-        "/org/freedesktop/UDisks2/block_devices/{}",
-        medium
-            .id
-            .rsplit('/')
-            .next()
-            .unwrap_or_default()
-            .replace('-', "_2d")
-    ))
-    .map_err(backend)?;
+    let path = block_path(&medium.id)?;
+
+    let filesystem = FilesystemProxy::builder(&connection)
+        .path(path.clone())
+        .map_err(backend)?
+        .build()
+        .await
+        .map_err(backend)?;
+
+    // udisks2 nie odmontowuje przed formatowaniem i nie robi tego za nas nikt
+    // inny: na zamontowanym wolumenie `Format` kończy się „Failed to open the
+    // device: Device or resource busy”.
+    unmount(&filesystem).await?;
 
     let proxy = BlockProxy::builder(&connection)
         .path(path)
@@ -241,7 +272,47 @@ pub async fn format_exfat(medium: &Medium, label: &str) -> Result<()> {
     let update = zbus::zvariant::Value::from(true);
     let options = HashMap::from([("label", &label), ("update-partition-type", &update)]);
 
-    proxy.format("exfat", options).await.map_err(backend)?;
+    proxy.format("exfat", options).await.map_err(service)?;
+
+    remount(&filesystem).await;
 
     Ok(())
+}
+
+/// Odmontowuje, godząc się z tym, że nośnik mógł nie być zamontowany.
+async fn unmount(filesystem: &FilesystemProxy<'_>) -> Result<()> {
+    match filesystem.unmount(HashMap::new()).await {
+        Ok(()) => Ok(()),
+        Err(zbus::Error::MethodError(name, _, _))
+            if name.as_str().ends_with(".Error.NotMounted") =>
+        {
+            Ok(())
+        }
+        Err(e) => Err(service(e)),
+    }
+}
+
+/// Montuje świeżo sformatowany nośnik z powrotem.
+///
+/// Bez tego zostawiamy użytkownika z pustym, niezamontowanym urządzeniem
+/// i jedyną radą „wypnij i wepnij”. Nie jest to jednak powód, żeby uznać samo
+/// formatowanie za nieudane — stąd ostrzeżenie zamiast błędu.
+///
+/// Interfejs systemu plików powstaje na nowo dopiero po tym, jak udisks2
+/// zauważy zmianę, więc pierwsza próba potrafi trafić w pustkę.
+async fn remount(filesystem: &FilesystemProxy<'_>) {
+    for attempt in 0..5 {
+        match filesystem.mount(HashMap::new()).await {
+            Ok(point) => {
+                tracing::info!("Nośnik zamontowany w {point}");
+                return;
+            }
+            Err(e) => {
+                tracing::debug!("Montowanie po formatowaniu, próba {}: {e}", attempt + 1);
+                tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+            }
+        }
+    }
+
+    tracing::warn!("Nośnik sformatowany, ale niezamontowany");
 }
