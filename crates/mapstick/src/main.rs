@@ -250,6 +250,10 @@ struct Worker {
     selected: Option<usize>,
     firmware: Option<FirmwareInfo>,
     output_dir: Option<PathBuf>,
+    /// Nośnik kliknięty na liście. Zapamiętany po ścieżce, bo numery wierszy
+    /// zmieniają się przy każdym odświeżeniu, a wybór ma przeżyć wskazanie
+    /// katalogu na dysku twardym.
+    chosen_medium: Option<PathBuf>,
     download: Option<JoinHandle<()>>,
     media: Vec<Medium>,
     pending_format: Option<usize>,
@@ -283,6 +287,7 @@ impl Worker {
             selected: None,
             firmware: None,
             output_dir: None,
+            chosen_medium: None,
             download: None,
             media: Vec::new(),
             pending_format: None,
@@ -768,24 +773,19 @@ impl Worker {
         self.push_copy_state();
     }
 
-    /// Jedyny podłączony nośnik przejmuje rolę celu.
+    /// Jedyny podłączony nośnik przejmuje rolę celu, dopóki celu nie ma.
     ///
-    /// Dzieje się to, gdy celu jeszcze nie ma albo gdy dotychczasowy okazał się
-    /// katalogiem z gotowym oprogramowaniem — taki katalog jest źródłem do
-    /// skopiowania, nie miejscem, w które cokolwiek pobierzemy. Ręcznie
-    /// wybranego katalogu bez gotowych plików nikt nie podmienia.
+    /// Wskazanego ręcznie katalogu nie podmieniamy nigdy — nawet gdy leży
+    /// w nim gotowe oprogramowanie. Kiedyś tak było, żeby od razu pokazać
+    /// „Skopiuj na nośnik”, ale odbierało to użytkownikowi wybór, którego
+    /// właśnie dokonał. Miejsce kopiowania wskazuje teraz
+    /// [`Worker::copy_destination`] i cel pobierania nie musi go udawać.
     fn adopt_single_medium(&mut self) {
         if self.media.len() != 1 || self.media[0].mount_point.is_none() {
             return;
         }
 
-        let target_is_source = self
-            .selected
-            .map(|i| &self.entries[i].car.id)
-            .and_then(|id| self.store.download_for(id))
-            .is_some_and(|d| Some(d.path.as_path()) == self.output_dir.as_deref());
-
-        if self.output_dir.is_none() || target_is_source {
+        if self.output_dir.is_none() {
             self.select_medium(0);
         }
     }
@@ -829,6 +829,33 @@ impl Worker {
     ///
     /// Sam wpis w pliku nie wystarcza: katalog mógł zniknąć albo zostać
     /// podmieniony, więc wersję potwierdzamy odczytem `.ver` na miejscu.
+    /// Nośnik, na który trafiłyby gotowe dane z dysku twardego.
+    ///
+    /// To nie musi być cel pobierania. Katalog wskazany ręcznie bywa właśnie
+    /// źródłem — i wtedy pytanie „dokąd skopiować” ma oczywistą odpowiedź,
+    /// o ile podłączony nośnik jest jeden. Przy kilku nie zgadujemy: niech
+    /// użytkownik kliknie ten, o który mu chodzi.
+    fn copy_destination(&self) -> Option<PathBuf> {
+        if self.target_is_medium() {
+            return self.output_dir.clone();
+        }
+
+        // Nośnik wskazany wcześniej kliknięciem, o ile wciąż jest podłączony.
+        if let Some(chosen) = &self.chosen_medium
+            && self
+                .media
+                .iter()
+                .any(|m| m.mount_point.as_deref() == Some(chosen.as_path()))
+        {
+            return Some(chosen.clone());
+        }
+
+        match self.media.as_slice() {
+            [only] => only.mount_point.clone(),
+            _ => None,
+        }
+    }
+
     fn ready_copy(&self) -> Option<PathBuf> {
         let index = self.selected?;
         let car = &self.entries[index].car;
@@ -840,7 +867,7 @@ impl Worker {
         }
 
         // Kopiowanie katalogu w to samo miejsce nie ma sensu.
-        if self.output_dir.as_deref() == Some(record.path.as_path()) {
+        if self.copy_destination().as_deref() == Some(record.path.as_path()) {
             return None;
         }
 
@@ -860,11 +887,23 @@ impl Worker {
             .map(|p| p.display().to_string())
             .unwrap_or_default();
 
+        // Bez nośnika nie ma dokąd kopiować, choćby dane na dysku były gotowe.
+        let onto = self
+            .copy_destination()
+            .filter(|_| !shown.is_empty())
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+
         tracing::info!(
-            "gotowe dane na dysku: {}",
-            if shown.is_empty() { "brak" } else { &shown }
+            "gotowe dane na dysku twardym: {} → {}",
+            if shown.is_empty() { "brak" } else { &shown },
+            if onto.is_empty() { "nie ma dokąd" } else { &onto }
         );
-        self.with_ui(move |ui| ui.set_copy_source(shown.into()));
+
+        self.with_ui(move |ui| {
+            ui.set_copy_source(shown.into());
+            ui.set_copy_target(onto.into());
+        });
     }
 
     /// Zapisuje, że dane leżą już na dysku.
@@ -1324,6 +1363,7 @@ impl Worker {
         };
 
         let shown = mount.display().to_string();
+        self.chosen_medium = Some(mount.clone());
         self.output_dir = Some(mount);
         let visible = index as i32;
 
@@ -1408,6 +1448,10 @@ impl Worker {
             self.with_ui(|ui| ui.set_output_dir(String::new().into()));
         }
 
+        if self.chosen_medium.as_deref() == Some(mount.as_path()) {
+            self.chosen_medium = None;
+        }
+
         let wiped: Vec<String> = self
             .store
             .downloads
@@ -1438,12 +1482,10 @@ impl Worker {
         self.output_dir = Some(path);
 
         self.with_ui(move |ui| ui.set_output_dir(shown.into()));
-        self.push_target_state();
 
-        // Lista nośników jest już wykryta, więc jeśli wskazany katalog okazał
-        // się gotowym źródłem, propozycja skopiowania ma się pokazać od razu —
-        // bez naciskania „Odśwież”.
-        self.adopt_single_medium();
+        // Lista nośników jest już wykryta, więc propozycja skopiowania pokazuje
+        // się od razu — bez naciskania „Odśwież”.
+        self.push_target_state();
     }
 
     /// Ustawia cel bez okna wyboru — pod testy na maszynie bez myszy.
@@ -1639,8 +1681,7 @@ impl Worker {
             anyhow!("Na dysku nie ma gotowego oprogramowania dla tego modelu.")
         })?;
         let target = self
-            .output_dir
-            .clone()
+            .copy_destination()
             .ok_or_else(|| anyhow!("Nie wybrano nośnika."))?;
         let index = self
             .selected

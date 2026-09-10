@@ -203,8 +203,10 @@ export component AppWindow inherits Window {
     in property <bool> space-warning: false;
 
     in property <string> output-dir;
-    /// Katalog na dysku z gotowymi danymi. Puste — nie ma czego kopiować.
+    /// Katalog na dysku twardym z gotowymi danymi. Puste — nie ma czego kopiować.
     in property <string> copy-source;
+    /// Nośnik, na który te dane trafią. Puste — nie ma dokąd kopiować.
+    in property <string> copy-target;
     in property <bool> delete-after-copy: false;
     in property <bool> copying: false;
     in property <bool> downloading: false;
@@ -640,21 +642,24 @@ export component AppWindow inherits Window {
                     HorizontalLayout {
                         spacing: 14px;
 
-                        if !root.downloading && !root.copying && !root.target-has-current
-                                && root.copy-source != "": Button {
+                        if !root.downloading && !root.copying
+                                && root.copy-source != "" && root.copy-target != "": Button {
                             width: 190px;
                             height: 42px;
                             text: "Skopiuj na nośnik";
                             primary: true;
-                            enabled: root.output-dir != "" && !root.formatting;
+                            enabled: !root.formatting;
                             clicked => { root.start-copy(); }
                         }
-                        if !root.downloading && !root.copying && !root.target-has-current
-                                && root.copy-source == "": Button {
+                        // Pobranie zostaje w zasięgu ręki nawet wtedy, gdy te
+                        // same dane leżą już na dysku twardym: kopiowanie jest
+                        // tańsze, ale to użytkownik decyduje, czego chce.
+                        if !root.downloading && !root.copying
+                                && !root.target-has-current: Button {
                             width: 190px;
                             height: 42px;
                             text: "Pobierz";
-                            primary: true;
+                            primary: root.copy-source == "" || root.copy-target == "";
                             enabled: root.output-dir != "" && !root.formatting;
                             clicked => { root.start-download(); }
                         }
@@ -718,8 +723,8 @@ export component AppWindow inherits Window {
                         overflow: elide;
                     }
 
-                    if root.copy-source != "" && !root.downloading && !root.copying
-                            && !root.target-has-current: VerticalLayout {
+                    if root.copy-source != "" && root.copy-target != ""
+                            && !root.downloading && !root.copying: VerticalLayout {
                         spacing: 3px;
 
                         Rectangle {
@@ -727,7 +732,7 @@ export component AppWindow inherits Window {
 
                             ready := Text {
                                 width: parent.width;
-                                text: "To oprogramowanie leży już na dysku — nie trzeba go pobierać drugi raz.";
+                                text: "To oprogramowanie leży już na dysku twardym — nie trzeba go pobierać drugi raz.";
                                 font-size: 12px;
                                 color: #4a9d5f;
                                 wrap: word-wrap;
@@ -735,6 +740,13 @@ export component AppWindow inherits Window {
                         }
                         Text {
                             text: root.copy-source;
+                            font-size: 11px;
+                            font-family: "monospace";
+                            opacity: 0.7;
+                            overflow: elide;
+                        }
+                        Text {
+                            text: "→ " + root.copy-target;
                             font-size: 11px;
                             font-family: "monospace";
                             opacity: 0.7;
