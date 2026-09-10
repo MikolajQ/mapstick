@@ -33,7 +33,9 @@ mod cache;
 mod copy;
 mod instance;
 mod link;
+mod schedule;
 mod stale;
+mod watch;
 
 slint::include_modules!();
 
@@ -70,6 +72,9 @@ enum Cmd {
     /// ostatniego modelu byłoby wtedy pobraniem katalogu na darmo.
     Startup { restore: bool },
     ToggleFavourite,
+    SetWatch(bool),
+    SetInterval(usize),
+    SetInstalled(usize),
     OpenFavourite(String),
     LoadModels { brand: usize, region: usize },
     Filter(String),
@@ -304,6 +309,8 @@ struct Worker {
     /// zmieniają się przy każdym odświeżeniu, a wybór ma przeżyć wskazanie
     /// katalogu na dysku twardym.
     chosen_medium: Option<PathBuf>,
+    /// Wersje pod listą „w aucie”, w kolejności pozycji. `None` to „nie wiem”.
+    installed_choices: Vec<Option<String>>,
     running: Option<Footprint>,
     download: Option<JoinHandle<()>>,
     media: Vec<Medium>,
@@ -339,6 +346,7 @@ impl Worker {
             firmware: None,
             output_dir: None,
             chosen_medium: None,
+            installed_choices: Vec::new(),
             running: None,
             download: None,
             media: Vec::new(),
@@ -463,13 +471,208 @@ impl Worker {
         });
     }
 
-    fn push_selected_favourite_state(&self) {
-        let is_favourite = self
+    fn push_selected_favourite_state(&mut self) {
+        let favourite = self
             .selected
-            .map(|i| self.store.contains(&self.entries[i].car.id))
-            .unwrap_or(false);
+            .map(|i| self.entries[i].car.id.clone())
+            .and_then(|id| self.store.find(&id));
 
-        self.with_ui(move |ui| ui.set_selected_is_favourite(is_favourite));
+        let is_favourite = favourite.is_some();
+        let watch = favourite.is_some_and(|f| f.watch);
+
+        let interval = mapstick_store::Interval::ALL
+            .iter()
+            .position(|i| *i == self.store.check_interval)
+            .unwrap_or(1) as i32;
+
+        let (labels, choices, chosen) = self.installed_options();
+        self.installed_choices = choices;
+
+        let note = self.watch_note();
+
+        self.with_ui(move |ui| {
+            ui.set_selected_is_favourite(is_favourite);
+            ui.set_selected_watch(watch);
+            ui.set_interval_index(interval);
+            ui.set_installed_choices(ModelRc::new(VecModel::from(labels)));
+            ui.set_installed_index(chosen as i32);
+            ui.set_watch_note(note.into());
+        });
+    }
+
+    /// Wersje, które mogą siedzieć w aucie: co wystawia producent, co sami
+    /// pobraliśmy, co przeczytaliśmy z nośnika. Pierwsza pozycja to „nie wiem”,
+    /// bo niewiedza jest stanem uczciwym i trzeba dać do niej wrócić.
+    fn installed_options(&self) -> (Vec<SharedString>, Vec<Option<String>>, usize) {
+        let mut labels = vec![SharedString::from("nie wiem")];
+        let mut choices: Vec<Option<String>> = vec![None];
+
+        let Some(index) = self.selected else {
+            return (labels, choices, 0);
+        };
+
+        let entry = &self.entries[index];
+        let favourite = self.store.find(&entry.car.id);
+
+        let mut add = |version: &str, released: Option<&str>| {
+            if version.is_empty() || choices.iter().any(|c| c.as_deref() == Some(version)) {
+                return;
+            }
+
+            labels.push(match released {
+                Some(date) if !date.is_empty() => format!("{date} — {version}").into(),
+                _ => version.into(),
+            });
+            choices.push(Some(version.to_owned()));
+        };
+
+        for version in &entry.car.versions {
+            add(version, Some(&entry.released));
+        }
+
+        if let Some(f) = favourite {
+            if let Some(v) = &f.downloaded_version {
+                add(v, None);
+            }
+            if let Some(v) = &f.installed_version {
+                add(v, None);
+            }
+        }
+
+        // Podpowiedź: ostatnie pobranie, bo to ono zwykle trafia do auta.
+        // Potwierdzony wybór użytkownika bije podpowiedź.
+        let wanted = favourite.and_then(|f| {
+            if f.installed_confirmed {
+                f.installed_version.clone()
+            } else {
+                f.installed_version.clone().or(f.downloaded_version.clone())
+            }
+        });
+
+        let chosen = wanted
+            .and_then(|v| choices.iter().position(|c| c.as_deref() == Some(v.as_str())))
+            .unwrap_or(0);
+
+        (labels, choices, chosen)
+    }
+
+    /// Zdanie o tym, kto i jak często nas budzi.
+    fn watch_note(&self) -> String {
+        let watched = self.store.watched().count();
+
+        if watched == 0 {
+            return String::new();
+        }
+
+        match schedule::current() {
+            Some(kind) => format!(
+                "Sprawdzam {} w tle ({} modele/i) — budzi mnie {}.",
+                self.store.check_interval.label(),
+                watched,
+                kind.label()
+            ),
+            None => "Nie mam jak sprawdzać w tle — harmonogram nie został założony.".to_owned(),
+        }
+    }
+
+    /// Włącza albo wyłącza pilnowanie modelu, zakładając harmonogram przy
+    /// pierwszym włączeniu i sprzątając go po ostatnim wyłączeniu.
+    fn set_watch(&mut self, on: bool) {
+        let Some(index) = self.selected else {
+            return;
+        };
+        let id = self.entries[index].car.id.clone();
+
+        let Some(favourite) = self.store.get_mut(&id) else {
+            return;
+        };
+
+        favourite.watch = on;
+        let label = favourite.label.clone();
+        self.save_store();
+
+        self.sync_schedule(if on {
+            format!("Pilnuję {label} — dam znać, gdy pojawi się nowe wydanie.")
+        } else {
+            format!("Przestaję pilnować {label}.")
+        });
+    }
+
+    fn set_interval(&mut self, index: usize) {
+        let Some(interval) = mapstick_store::Interval::ALL.get(index).copied() else {
+            return;
+        };
+
+        self.store.check_interval = interval;
+        self.save_store();
+
+        self.sync_schedule(format!("Sprawdzam {} w tle.", interval.label()));
+    }
+
+    /// Dostraja harmonogram do tego, czego pilnujemy, i melduje wynik.
+    fn sync_schedule(&mut self, message: String) {
+        let watched = self.store.watched().count();
+
+        let outcome = if watched == 0 {
+            schedule::remove().map(|()| None)
+        } else {
+            schedule::install(self.store.check_interval).map(Some)
+        };
+
+        match outcome {
+            Ok(Some(kind)) => self.set_status(format!("{message} Budzi mnie {}.", kind.label()), false),
+            Ok(None) => self.set_status(message, false),
+            Err(e) => self.set_status(
+                format!("{message} Nie udało się jednak założyć harmonogramu: {e:#}"),
+                true,
+            ),
+        }
+
+        self.push_selected_favourite_state();
+    }
+
+    /// Zapisuje wersję, którą użytkownik wskazał jako obecną w aucie.
+    fn set_installed(&mut self, index: usize) {
+        let Some(choice) = self.installed_choices.get(index).cloned() else {
+            return;
+        };
+        let Some(model_index) = self.selected else {
+            return;
+        };
+        let id = self.entries[model_index].car.id.clone();
+
+        let Some(favourite) = self.store.get_mut(&id) else {
+            return;
+        };
+
+        let label = favourite.label.clone();
+
+        match choice {
+            Some(version) => {
+                favourite.installed_version = Some(version.clone());
+                favourite.installed_source = Some(InstalledSource::Manual);
+                favourite.installed_confirmed = true;
+
+                // Powiadomienie o tej wersji przestaje mieć sens, skoro auto
+                // ją ma; o następnej powiemy od nowa.
+                favourite.notified_version = Some(version.clone());
+
+                self.set_status(format!("{label}: w aucie {version}."), false);
+            }
+            None => {
+                favourite.installed_version = None;
+                favourite.installed_source = None;
+                favourite.installed_confirmed = false;
+                favourite.notified_version = None;
+
+                self.set_status(format!("{label}: nie wiadomo, co w aucie."), false);
+            }
+        }
+
+        self.save_store();
+        self.push_favourites();
+        self.push_selected_favourite_state();
+        self.push_target_state();
     }
 
     fn toggle_favourite(&mut self) {
@@ -2358,6 +2561,9 @@ impl Worker {
                 Cmd::ClearCache => self.clear_cache(),
                 Cmd::Startup { restore } => self.startup(restore).await,
                 Cmd::ToggleFavourite => self.toggle_favourite(),
+                Cmd::SetWatch(on) => self.set_watch(on),
+                Cmd::SetInterval(index) => self.set_interval(index),
+                Cmd::SetInstalled(index) => self.set_installed(index),
                 Cmd::OpenFavourite(id) => self.open_favourite(id).await,
                 Cmd::FavouritesRefreshed(versions) => self.apply_favourite_versions(versions),
                 Cmd::OpenLink(url) => self.open_link(url).await,
@@ -2442,12 +2648,26 @@ fn main() -> Result<()> {
         .install_default()
         .map_err(|_| anyhow!("Nie udało się ustawić dostawcy kryptografii rustls"))?;
 
-    // Uruchomienie z odnośnikiem ze strony producenta. Jeśli okno już stoi
-    // otwarte, oddajemy mu odnośnik i kończymy — drugie okno nikomu nie służy.
-    let link = std::env::args().nth(1).filter(|a| link::is_link(a));
+    let args: Vec<String> = std::env::args().skip(1).collect();
 
-    if let Some(url) = &link
-        && instance::hand_off(url)
+    // Sprawdzenie z harmonogramu: bez okna, bez pętli zdarzeń, bez ekranu.
+    // Kończy się samo, więc między sprawdzeniami nie zostaje ani jeden proces.
+    if args.iter().any(|a| a == "--sprawdz") {
+        let force = args.iter().any(|a| a == "--teraz");
+
+        return watch::run(force);
+    }
+
+    // Uruchomienie z odnośnikiem ze strony producenta albo z powiadomienia.
+    // Jeśli okno już stoi otwarte, oddajemy mu wiadomość i kończymy — drugie
+    // okno nikomu nie służy.
+    let message = args
+        .first()
+        .filter(|a| link::is_link(a) || a.starts_with(instance::MODEL_PREFIX))
+        .cloned();
+
+    if let Some(message) = &message
+        && instance::hand_off(message)
     {
         return Ok(());
     }
@@ -2456,6 +2676,12 @@ fn main() -> Result<()> {
 
     let regions: Vec<SharedString> = REGIONS.iter().map(|(_, label)| (*label).into()).collect();
     ui.set_regions(ModelRc::new(VecModel::from(regions)));
+
+    let intervals: Vec<SharedString> = mapstick_store::Interval::ALL
+        .iter()
+        .map(|i| i.label().into())
+        .collect();
+    ui.set_intervals(ModelRc::new(VecModel::from(intervals)));
     ui.set_models(ModelRc::new(VecModel::<ModelRow>::default()));
     ui.set_status("Wybierz markę i region — lista modeli pobierze się sama.".into());
 
@@ -2476,19 +2702,19 @@ fn main() -> Result<()> {
 
     instance::listen({
         let t = tx.clone();
-        move |url| {
-            let _ = t.send(Cmd::OpenLink(url));
+        move |message| {
+            let _ = t.send(incoming(message));
         }
     });
 
     // Pomoc dla testów na maszynie bez sterowania myszą: MAPSTICK_DEV=lista
     // wczytuje modele, MAPSTICK_DEV=nosnik dodatkowo wchodzi w widok nośnika.
     let _ = tx.send(Cmd::Startup {
-        restore: link.is_none(),
+        restore: message.is_none(),
     });
 
-    if let Some(url) = link {
-        let _ = tx.send(Cmd::OpenLink(url));
+    if let Some(message) = message {
+        let _ = tx.send(incoming(message));
     }
 
     if let Ok(stage @ ("lista" | "nosnik")) = std::env::var("MAPSTICK_DEV").as_deref() {
@@ -2505,6 +2731,12 @@ fn main() -> Result<()> {
 
         if std::env::var_os("MAPSTICK_DEV_FAV").is_some() {
             let _ = tx.send(Cmd::ToggleFavourite);
+        }
+
+        // MAPSTICK_DEV_PILNUJ=1 włącza pilnowanie modelu, =0 wyłącza — bez
+        // myszy nie ma jak nacisnąć tego pola.
+        if let Ok(on) = std::env::var("MAPSTICK_DEV_PILNUJ") {
+            let _ = tx.send(Cmd::SetWatch(on == "1"));
         }
 
         if std::env::var_os("MAPSTICK_DEV_DIRECT").is_some() {
@@ -2583,6 +2815,15 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// Wiadomość z zewnątrz: odnośnik ze strony producenta albo model
+/// z powiadomienia o nowym wydaniu.
+fn incoming(message: String) -> Cmd {
+    match message.strip_prefix(instance::MODEL_PREFIX) {
+        Some(model_id) => Cmd::OpenFavourite(model_id.to_owned()),
+        None => Cmd::OpenLink(message),
+    }
+}
+
 fn wire_callbacks(ui: &AppWindow, tx: UnboundedSender<Cmd>) {
     let t = tx.clone();
     ui.on_load_models(move |brand, region| {
@@ -2634,6 +2875,21 @@ fn wire_callbacks(ui: &AppWindow, tx: UnboundedSender<Cmd>) {
         if let Err(e) = spawned {
             tracing::warn!("Nie udało się otworzyć okna wyboru katalogu: {e}");
         }
+    });
+
+    let t = tx.clone();
+    ui.on_set_watch(move |on| {
+        let _ = t.send(Cmd::SetWatch(on));
+    });
+
+    let t = tx.clone();
+    ui.on_set_interval(move |index| {
+        let _ = t.send(Cmd::SetInterval(index.max(0) as usize));
+    });
+
+    let t = tx.clone();
+    ui.on_set_installed(move |index| {
+        let _ = t.send(Cmd::SetInstalled(index.max(0) as usize));
     });
 
     let t = tx.clone();

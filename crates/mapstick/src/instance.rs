@@ -14,6 +14,11 @@ use std::{
     path::PathBuf,
 };
 
+/// Przedrostek wiadomości „pokaż ten model”. Gniazdem chodzą też odnośniki
+/// ze strony producenta, a te zaczynają się od własnych schematów URI, więc
+/// jedno od drugiego odróżnia się bez zgadywania.
+pub const MODEL_PREFIX: &str = "model:";
+
 #[cfg(unix)]
 fn socket_path() -> PathBuf {
     std::env::var_os("XDG_RUNTIME_DIR")

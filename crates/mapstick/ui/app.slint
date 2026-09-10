@@ -179,6 +179,15 @@ export component AppWindow inherits Window {
     in-out property <int> region-index: 0;
     in property <[FavouriteRow]> favourites;
     in property <bool> selected-is-favourite: false;
+    /// Czy ten model jest sprawdzany w tle, bez uruchamiania aplikacji.
+    in property <bool> selected-watch: false;
+    in property <[string]> intervals;
+    in-out property <int> interval-index: 1;
+    /// Wersje, które mogą siedzieć w aucie — pierwsza pozycja to „nie wiem”.
+    in property <[string]> installed-choices;
+    in-out property <int> installed-index: 0;
+    /// Czym budzi nas system i jak często. Puste — nikt nas nie budzi.
+    in property <string> watch-note;
     in property <string> favourites-note;
 
     in property <int> selected-index: -1;
@@ -248,6 +257,9 @@ export component AppWindow inherits Window {
     callback set-direct-mode(bool);
     callback clear-cache();
     callback toggle-favourite();
+    callback set-watch(bool);
+    callback set-interval(int);
+    callback set-installed(int);
     callback open-favourite(string);
 
     VerticalBox {
@@ -485,6 +497,53 @@ export component AppWindow inherits Window {
                                 + (root.detail-released == "" ? "" : "   ·   ostatnie dostępne wydanie " + root.detail-released);
                             font-size: 12px;
                             opacity: 0.8;
+                            overflow: elide;
+                        }
+
+                        // Rzeczy, które mają sens dopiero dla zapamiętanego
+                        // auta: pilnowanie wydań i to, co w nim siedzi.
+                        if root.selected-is-favourite: HorizontalLayout {
+                            spacing: 8px;
+
+                            CheckBox {
+                                text: "pilnuj aktualizacji";
+                                checked: root.selected-watch;
+                                toggled => { root.set-watch(self.checked); }
+                            }
+
+                            Text {
+                                text: "co:";
+                                vertical-alignment: center;
+                                font-size: 12px;
+                                opacity: 0.7;
+                            }
+                            ComboBox {
+                                width: 120px;
+                                model: root.intervals;
+                                current-index <=> root.interval-index;
+                                enabled: root.selected-watch;
+                                selected => { root.set-interval(self.current-index); }
+                            }
+
+                            Text {
+                                text: "w aucie:";
+                                vertical-alignment: center;
+                                font-size: 12px;
+                                opacity: 0.7;
+                            }
+                            ComboBox {
+                                horizontal-stretch: 1;
+                                min-width: 240px;
+                                model: root.installed-choices;
+                                current-index <=> root.installed-index;
+                                selected => { root.set-installed(self.current-index); }
+                            }
+                        }
+
+                        if root.selected-is-favourite && root.watch-note != "": Text {
+                            text: root.watch-note;
+                            font-size: 11px;
+                            opacity: 0.7;
                             overflow: elide;
                         }
 
