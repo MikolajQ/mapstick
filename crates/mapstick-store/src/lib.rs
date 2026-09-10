@@ -116,6 +116,28 @@ impl Interval {
     }
 }
 
+/// Wariant zestawu multimedialnego, wyczytany z numeru wersji.
+///
+/// Jeden model potrafi mieć dwa: `NE1.ERT.ccNC_Lite.001.002.260312`
+/// i `NE1.EUR.ccNC.001.002.260312` to ten sam IONIQ 5 z dwoma różnymi
+/// głowicami. Producent wystawia obie naraz, a jedno pobranie niesie pliki
+/// dla obu — auto bierze swoje. Porównywanie ich ze sobą nie ma sensu:
+/// „nowsze” trzeba liczyć osobno w każdej rodzinie.
+///
+/// Rodzinę wyznaczają trzy pierwsze człony; reszta to numer wydania.
+pub fn variant(version: &str) -> &str {
+    let mut end = 0;
+
+    for (count, part) in version.split('.').enumerate().take(3) {
+        if count > 0 {
+            end += 1;
+        }
+        end += part.len();
+    }
+
+    &version[..end]
+}
+
 impl Favourite {
     /// Wersja, którą uznajemy za obecną w aucie.
     ///
@@ -126,6 +148,21 @@ impl Favourite {
         self.installed_version
             .as_deref()
             .or(self.downloaded_version.as_deref())
+    }
+
+    /// Która z wystawionych wersji dotyczy tego auta.
+    ///
+    /// Jeśli wiemy, co w nim siedzi, trzymamy się tej samej rodziny. Bez tej
+    /// wiedzy zostaje pierwsza z listy — i tak trzeba coś pokazać, a i tak
+    /// prosimy wtedy o zaznaczenie wersji.
+    pub fn matching<'a>(&self, versions: &'a [String]) -> Option<&'a String> {
+        if let Some(known) = self.known_version()
+            && let Some(same) = versions.iter().find(|v| variant(v) == variant(known))
+        {
+            return Some(same);
+        }
+
+        versions.first()
     }
 
     /// Czy producent wystawia coś nowszego niż to, co mamy.
@@ -469,6 +506,61 @@ mod tests {
 
         let store = Store::load(&path).unwrap();
         assert!(store.downloads.is_empty());
+    }
+
+    #[test]
+    fn the_variant_is_the_first_three_parts() {
+        assert_eq!(
+            variant("NE1.ERT.ccNC_Lite.001.002.260312"),
+            "NE1.ERT.ccNC_Lite"
+        );
+        assert_eq!(variant("NE1.EUR.ccNC.001.002.260312"), "NE1.EUR.ccNC");
+        assert_eq!(variant("BC3.EUR.S5W_L.001.001.260128"), "BC3.EUR.S5W_L");
+        assert_eq!(variant("DH.EUR.SOP.XX.017"), "DH.EUR.SOP");
+        assert_eq!(variant("krotkie"), "krotkie");
+        assert_eq!(variant(""), "");
+    }
+
+    /// Dwie głowice, dwa numery — auto interesuje wyłącznie jego własny.
+    #[test]
+    fn the_matching_version_stays_in_the_same_family() {
+        let versions = vec![
+            "NE1.EUR.ccNC.001.002.260312".to_owned(),
+            "NE1.ERT.ccNC_Lite.001.002.260312".to_owned(),
+        ];
+
+        let mut f = sample();
+        f.installed_version = Some("NE1.ERT.ccNC_Lite.001.001.250101".to_owned());
+
+        assert_eq!(
+            f.matching(&versions).unwrap(),
+            "NE1.ERT.ccNC_Lite.001.002.260312"
+        );
+    }
+
+    /// Bez wiedzy o aucie bierzemy pierwszą z listy — nie ma lepszej odpowiedzi.
+    #[test]
+    fn without_a_known_version_the_first_one_stands_in() {
+        let versions = vec![
+            "NE1.EUR.ccNC.001.002.260312".to_owned(),
+            "NE1.ERT.ccNC_Lite.001.002.260312".to_owned(),
+        ];
+
+        assert_eq!(
+            sample().matching(&versions).unwrap(),
+            "NE1.EUR.ccNC.001.002.260312"
+        );
+    }
+
+    /// Rodzina, której producent już nie wystawia, nie może udawać, że jest.
+    #[test]
+    fn an_unlisted_family_falls_back_to_the_first() {
+        let versions = vec!["NE1.EUR.ccNC.001.002.260312".to_owned()];
+
+        let mut f = sample();
+        f.installed_version = Some("XX.YY.ZZ.001".to_owned());
+
+        assert_eq!(f.matching(&versions).unwrap(), "NE1.EUR.ccNC.001.002.260312");
     }
 
     /// Gdy nie wiemy, co w aucie, ale wiemy, co sami pobraliśmy — to lepsze

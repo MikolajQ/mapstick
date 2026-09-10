@@ -139,7 +139,9 @@ enum CopyEnd {
 #[derive(Debug)]
 struct FavouriteVersion {
     model_id: String,
-    version: Option<String>,
+    /// Wszystkie wystawione wersje, bo jeden model bywa w dwóch odmianach
+    /// głowicy. Którą wybrać, wie dopiero wpis w ulubionych.
+    versions: Vec<String>,
     released: Option<String>,
 }
 
@@ -527,14 +529,30 @@ impl Worker {
         let entry = &self.entries[index];
         let favourite = self.store.find(&entry.car.id);
 
+        // Dwie wersje jednego modelu to zwykle dwie głowice (`ccNC`
+        // i `ccNC_Lite`), a nie starsza i nowsza. Sam numer nie mówi, która
+        // jest w aucie — mówi to, gdzie ją widzieliśmy.
+        let seen_on_medium = favourite
+            .filter(|f| f.installed_source == Some(InstalledSource::VerFile))
+            .and_then(|f| f.installed_version.clone());
+        let downloaded = favourite.and_then(|f| f.downloaded_version.clone());
+
         let mut add = |version: &str, released: Option<&str>| {
             if version.is_empty() || choices.iter().any(|c| c.as_deref() == Some(version)) {
                 return;
             }
 
+            let hint = if seen_on_medium.as_deref() == Some(version) {
+                "  ·  odczytane z nośnika"
+            } else if downloaded.as_deref() == Some(version) {
+                "  ·  to pobraliśmy"
+            } else {
+                ""
+            };
+
             labels.push(match released {
-                Some(date) if !date.is_empty() => format!("{date} — {version}").into(),
-                _ => version.into(),
+                Some(date) if !date.is_empty() => format!("{date} — {version}{hint}").into(),
+                _ => format!("{version}{hint}").into(),
             });
             choices.push(Some(version.to_owned()));
         };
@@ -740,7 +758,7 @@ impl Worker {
                 continue;
             };
 
-            favourite.latest_seen_version = entry.car.versions.first().cloned();
+            favourite.latest_seen_version = favourite.matching(&entry.car.versions).cloned();
             favourite.latest_released = Some(entry.released.clone()).filter(|r| !r.is_empty());
             favourite.latest_checked_at = Some(mapstick_store::now());
             changed = true;
@@ -795,7 +813,7 @@ impl Worker {
                             .filter(|e| wanted.contains(&e.car.id))
                             .map(|e| FavouriteVersion {
                                 model_id: e.car.id,
-                                version: e.car.versions.into_iter().next(),
+                                versions: e.car.versions,
                                 released: Some(e.released).filter(|r| !r.is_empty()),
                             }),
                     ),
@@ -819,7 +837,7 @@ impl Worker {
                 continue;
             };
 
-            favourite.latest_seen_version = item.version;
+            favourite.latest_seen_version = favourite.matching(&item.versions).cloned();
             favourite.latest_released = item.released;
             favourite.latest_checked_at = Some(mapstick_store::now());
             changed = true;

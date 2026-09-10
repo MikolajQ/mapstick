@@ -176,7 +176,10 @@ async fn check(store: &mut Store) -> Vec<News> {
             let Some(favourite) = store.get_mut(&entry.car.id) else {
                 continue;
             };
-            let Some(version) = entry.car.versions.into_iter().next() else {
+
+            // Model bywa wystawiony w dwóch odmianach głowicy naraz; auto ma
+            // jedną z nich i tylko ona świadczy o tym, czy coś się zmieniło.
+            let Some(version) = favourite.matching(&entry.car.versions).cloned() else {
                 continue;
             };
 
