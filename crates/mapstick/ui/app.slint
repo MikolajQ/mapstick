@@ -426,8 +426,13 @@ export component AppWindow inherits Window {
                 }
             }
 
+            // Wysokość z zawartości, nie z liczby wpisanej na sztywno: karta
+            // rośnie o wiersz, gdy model jest ulubiony, i o kolejny, gdy jest
+            // pilnowany. Przy 128px ostatni wiersz wychodził poza ramkę
+            // i nachodził na pasek stanu.
             Rectangle {
-                height: 128px;
+                min-height: 128px;
+                vertical-stretch: 0;
                 border-width: 1px;
                 border-color: #8884;
                 border-radius: 4px;

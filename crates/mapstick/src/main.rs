@@ -221,6 +221,19 @@ fn remove_partial_archives(directory: &Path) -> u64 {
     freed
 }
 
+/// Odmiana słowa „model” przez liczbę — polszczyzna ma trzy formy, a
+/// „1 modele/i” wygląda jak awaria, nie jak komunikat.
+fn models(count: usize) -> &'static str {
+    let (last, teens) = (count % 10, count % 100);
+
+    match (count, last, teens) {
+        (1, _, _) => "model",
+        (_, 2..=4, 12..=14) => "modeli",
+        (_, 2..=4, _) => "modele",
+        _ => "modeli",
+    }
+}
+
 /// Ile bajtów poleci przez sieć i ile zajmie na nośniku.
 ///
 /// To dwie różne liczby: pliki przychodzą spakowane, a na nośnik trafiają
@@ -566,9 +579,9 @@ impl Worker {
 
         match schedule::current() {
             Some(kind) => format!(
-                "Sprawdzam {} w tle ({} modele/i) — budzi mnie {}.",
+                "Sprawdzam {} w tle ({watched} {}) — budzi mnie {}.",
                 self.store.check_interval.label(),
-                watched,
+                models(watched),
                 kind.label()
             ),
             None => "Nie mam jak sprawdzać w tle — harmonogram nie został założony.".to_owned(),
