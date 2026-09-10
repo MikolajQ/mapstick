@@ -17,9 +17,9 @@ nudl = { path = "../../../nudl" }
 reqwest = { version = "0.13.1", features = ["charset", "json", "http2", "rustls-no-provider"], default-features = false }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.140"
-rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
+rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal", "wayland"] }
 rustls = { version = "0.23.36", features = ["ring"], default-features = false }
-slint = "1.17.1"
+slint = { version = "1.17.1", features = ["raw-window-handle-06"] }
 tokio = { version = "1.36.0", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"

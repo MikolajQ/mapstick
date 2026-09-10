@@ -74,7 +74,6 @@ enum Cmd {
     LoadModels { brand: usize, region: usize },
     Filter(String),
     Select(usize),
-    PickOutputDir,
     StartDownload,
     Cancel,
     SetDirectMode(bool),
@@ -1468,16 +1467,13 @@ impl Worker {
         }
     }
 
-    async fn pick_output_dir(&mut self) {
-        let Some(dir) = rfd::AsyncFileDialog::new()
-            .set_title("Katalog docelowy")
-            .pick_folder()
-            .await
-        else {
-            return;
-        };
+    /// Przyjmuje wskazany katalog jako cel.
+    ///
+    /// Przychodzi tu wynik okna wyboru — i to samo robi `MAPSTICK_DEV_CEL`
+    /// przy testach na maszynie bez myszy.
+    fn use_directory(&mut self, path: PathBuf) {
+        tracing::info!("Cel wskazany ręcznie: {}", path.display());
 
-        let path = dir.path().to_path_buf();
         let shown = path.display().to_string();
         self.output_dir = Some(path);
 
@@ -1485,15 +1481,6 @@ impl Worker {
 
         // Lista nośników jest już wykryta, więc propozycja skopiowania pokazuje
         // się od razu — bez naciskania „Odśwież”.
-        self.push_target_state();
-    }
-
-    /// Ustawia cel bez okna wyboru — pod testy na maszynie bez myszy.
-    fn use_directory(&mut self, path: PathBuf) {
-        let shown = path.display().to_string();
-        self.output_dir = Some(path);
-
-        self.with_ui(move |ui| ui.set_output_dir(shown.into()));
         self.push_target_state();
     }
 
@@ -2106,7 +2093,6 @@ impl Worker {
                         self.set_status(format!("Nie udało się pobrać informacji: {e}"), true);
                     }
                 }
-                Cmd::PickOutputDir => self.pick_output_dir().await,
                 Cmd::UseDirectory(path) => self.use_directory(path),
                 Cmd::StartDownload => {
                     if let Err(e) = self.start_download() {
@@ -2295,6 +2281,12 @@ fn main() -> Result<()> {
 
     wire_callbacks(&ui, tx);
 
+    // MAPSTICK_DEV_WYBOR naciska „Inny katalog…” za użytkownika — bez myszy
+    // nie ma jak tego sprawdzić.
+    if std::env::var_os("MAPSTICK_DEV_WYBOR").is_some() {
+        ui.invoke_pick_output_dir();
+    }
+
     ui.run()?;
     instance::cleanup();
 
@@ -2323,8 +2315,35 @@ fn wire_callbacks(ui: &AppWindow, tx: UnboundedSender<Cmd>) {
     });
 
     let t = tx.clone();
+    let weak = ui.as_weak();
     ui.on_pick_output_dir(move || {
-        let _ = t.send(Cmd::PickOutputDir);
+        let Some(ui) = weak.upgrade() else {
+            return;
+        };
+
+        // Okno wyboru dostaje MapSticka za rodzica. Bez tego kompozytor nie ma
+        // powodu stawiać go nad oknem aplikacji, a schowane za nim wygląda
+        // dokładnie tak, jakby przycisk nie działał.
+        let dialog = rfd::AsyncFileDialog::new()
+            .set_title("Katalog docelowy")
+            .set_parent(&ui.window().window_handle());
+
+        // Czekamy w pętli interfejsu, a nie w wątku poleceń: tam czekanie
+        // wstrzymałoby wszystko inne — odświeżanie nośników, wybór modelu,
+        // odnośnik ze strony producenta — dopóki okno stoi otwarte.
+        let t = t.clone();
+        let spawned = slint::spawn_local(async move {
+            match dialog.pick_folder().await {
+                Some(dir) => {
+                    let _ = t.send(Cmd::UseDirectory(dir.path().to_path_buf()));
+                }
+                None => tracing::info!("Wybór katalogu anulowany"),
+            }
+        });
+
+        if let Err(e) = spawned {
+            tracing::warn!("Nie udało się otworzyć okna wyboru katalogu: {e}");
+        }
     });
 
     let t = tx.clone();
