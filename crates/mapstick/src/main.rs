@@ -2370,6 +2370,18 @@ impl Worker {
 
         self.push_favourites();
 
+        // Harmonogram zakładamy na nowo przy każdym starcie, jeśli jest
+        // komu pilnować. To, co system ma w plikach, pochodzi z chwili
+        // zaznaczenia pola — starsza wersja aplikacji mogła zapisać inny
+        // rytm albo inną ścieżkę do binarki. Zakładanie jest idempotentne
+        // i trwa ułamek sekundy.
+        if self.store.watched().next().is_some() {
+            match schedule::install(self.store.check_interval) {
+                Ok(kind) => tracing::info!("Harmonogram odświeżony: {}", kind.label()),
+                Err(e) => tracing::warn!("Nie udało się odświeżyć harmonogramu: {e:#}"),
+            }
+        }
+
         self.spawn_favourite_refresh();
 
         self.link_table = link::Table::load();
