@@ -620,7 +620,7 @@ impl Worker {
 
         match schedule::current() {
             Some(kind) => format!(
-                "Sprawdzam {} w tle ({watched} {}) — budzi mnie {}.",
+                "Pytam producenta {} ({watched} {}), o nowym wydaniu przypominam                  codziennie — budzi mnie {}.",
                 self.store.check_interval.label(),
                 models(watched),
                 kind.label()
@@ -660,7 +660,7 @@ impl Worker {
         self.store.check_interval = interval;
         self.save_store();
 
-        self.sync_schedule(format!("Sprawdzam {} w tle.", interval.label()));
+        self.sync_schedule(format!("Pytam producenta {}.", interval.label()));
     }
 
     /// Dostraja harmonogram do tego, czego pilnujemy, i melduje wynik.
@@ -717,7 +717,9 @@ impl Worker {
                 favourite.installed_version = None;
                 favourite.installed_source = None;
                 favourite.installed_confirmed = false;
+                // „Nie wiem” to prośba o przypomnienie — od najbliższego razu.
                 favourite.notified_version = None;
+                favourite.notified_at = None;
 
                 self.set_status(format!("{label}: nie wiadomo, co w aucie."), false);
             }
@@ -758,6 +760,7 @@ impl Worker {
                 // „interesuje mnie ten model”, a nie „sprawdzaj go beze mnie”.
                 watch: false,
                 notified_version: None,
+                notified_at: None,
             });
             self.set_status(format!("{} dodany do ulubionych.", car.name), false);
 

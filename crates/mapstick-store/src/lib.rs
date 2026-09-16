@@ -76,10 +76,13 @@ pub struct Favourite {
     /// Czy sprawdzać ten model w tle, bez uruchamiania aplikacji.
     #[serde(default)]
     pub watch: bool,
-    /// Wersja, o której już powiadomiliśmy. Bez tego to samo wydanie
-    /// przypominałoby o sobie przy każdym sprawdzeniu.
+    /// Wersja, o której ostatnio powiadomiliśmy, i kiedy. Przypominamy
+    /// codziennie, dopóki auto jej nie ma — ale nie częściej, choćby coś
+    /// budziło sprawdzanie co godzinę.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notified_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notified_at: Option<String>,
 }
 
 /// Jak często sprawdzać aktualizacje w tle.
@@ -97,15 +100,6 @@ pub enum Interval {
 
 impl Interval {
     pub const ALL: &'static [Interval] = &[Interval::Daily, Interval::Weekly, Interval::Monthly];
-
-    /// Postać, którą rozumie `OnCalendar=` systemd.
-    pub fn calendar(self) -> &'static str {
-        match self {
-            Interval::Daily => "daily",
-            Interval::Weekly => "weekly",
-            Interval::Monthly => "monthly",
-        }
-    }
 
     pub fn label(self) -> &'static str {
         match self {
@@ -396,6 +390,7 @@ mod tests {
             vin: None,
             watch: false,
             notified_version: None,
+            notified_at: None,
         }
     }
 

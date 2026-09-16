@@ -1,7 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Mikołaj
 // SPDX-License-Identifier: GPL-3.0-only
 
-//! Zakładanie harmonogramu, który co jakiś czas woła `mapstick --sprawdz`.
+//! Zakładanie harmonogramu, który codziennie woła `mapstick --sprawdz`.
+//!
+//! Codziennie, niezależnie od tego, jak często użytkownik chce pytać
+//! producenta: o tym odstępie i o codziennych przypomnieniach decyduje samo
+//! sprawdzanie (patrz [`crate::watch`]). Harmonogram ma tylko dawać mu szansę
+//! raz na dobę — budzenie, które nie ma nic do roboty, kończy się po rzucie
+//! oka na plik.
 //!
 //! Sami nie budzimy się z niczego — od budzenia jest system. Na Linuksie
 //! próbujemy po kolei trzech dróg, bo nie każdy pulpit ma systemd, a i tam,
@@ -14,9 +20,9 @@
 //!    w niedzielę o północy znaczy tydzień bez sprawdzenia,
 //! 3. **uruchomienie przy logowaniu** — najsłabsze, za to działa zawsze.
 //!
-//! Trzecia droga wystarcza, bo o odstępie i tak decyduje samo sprawdzanie
-//! (patrz [`crate::watch`]): choćby coś wołało nas przy każdym logowaniu,
-//! zapytanie poleci raz na tydzień.
+//! Trzecia droga wystarcza z tego samego powodu: choćby coś wołało nas przy
+//! każdym logowaniu, zapytanie do producenta poleci wedle odstępu,
+//! a przypomnienie raz na dobę.
 
 use std::path::PathBuf;
 
@@ -127,19 +133,19 @@ mod linux {
 
         let timer = format!(
             "[Unit]\n\
-             Description=MapStick — sprawdzanie nowych wydań map ({})\n\
+             Description=MapStick — sprawdzanie nowych wydań map (pytania {}, przypomnienia codziennie)\n\
              \n\
              [Timer]\n\
-             OnCalendar={}\n\
-             # Nadrabia sprawdzenie przegapione przy wyłączonym komputerze.\n\
+             # Codziennie: o tym, czy dziś pytać producenta, decyduje sama aplikacja.\n\
+             OnCalendar=daily\n\
+             # Nadrabia budzenie przegapione przy wyłączonym komputerze.\n\
              Persistent=true\n\
              # Godzina luzu, żeby wszyscy nie pytali serwisu o tej samej minucie.\n\
              RandomizedDelaySec=1h\n\
              \n\
              [Install]\n\
              WantedBy=timers.target\n",
-            interval.label(),
-            interval.calendar()
+            interval.label()
         );
 
         std::fs::write(directory.join(format!("{NAME}.service")), service)?;
@@ -155,12 +161,8 @@ mod linux {
     }
 
     /// Wiersz crona z naszym znacznikiem — po nim poznajemy swoje wpisy.
-    fn cron_line(interval: Interval) -> Result<String> {
-        Ok(format!(
-            "@{} {} --sprawdz # {NAME}",
-            interval.calendar(),
-            binary()?.display()
-        ))
+    fn cron_line(_interval: Interval) -> Result<String> {
+        Ok(format!("@daily {} --sprawdz # {NAME}", binary()?.display()))
     }
 
     fn crontab_read() -> Option<String> {
@@ -223,7 +225,7 @@ mod linux {
             "[Desktop Entry]\n\
              Type=Application\n\
              Name=MapStick — sprawdzanie aktualizacji map\n\
-             Comment=Sprawdza {} przy logowaniu; o odstępie decyduje sama aplikacja\n\
+             Comment=Pyta producenta {}; o odstępie i przypomnieniach decyduje sama aplikacja\n\
              Exec={} --sprawdz\n\
              Terminal=false\n\
              NoDisplay=true\n\

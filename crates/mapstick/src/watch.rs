@@ -8,22 +8,27 @@
 //! i pokazuje powiadomienie, jeśli jest o czym mówić. Między sprawdzeniami nie
 //! zostaje w pamięci nic — to najlżejsza usługa, jaka istnieje.
 //!
-//! Odstęp pilnujemy sami, zamiast ufać wyzwalaczowi. Timer systemd, wpis
-//! w cronie i uruchomienie przy logowaniu wołają nas z różną regularnością,
-//! a przy trzech oknach terminala dziennie logowanie potrafi zawołać nas trzy
-//! razy. Data ostatniego sprawdzenia rozstrzyga to bez względu na to, kto
-//! nacisnął spust.
+//! Dwa rytmy, jeden proces. System budzi nas **codziennie**, ale producenta
+//! pytamy wedle odstępu z ustawień (domyślnie raz w tygodniu) — reszta budzeń
+//! to sam rzut oka na plik. Za to o wydaniu, którego auto jeszcze nie ma,
+//! przypominamy **co dzień**, aż ktoś skopiuje je na nośnik albo zaznaczy,
+//! że auto już je ma. Jedno powiadomienie w gąszczu innych ginie; codzienne
+//! nie zginie, a kończy się dokładnie wtedy, gdy przestaje być potrzebne.
+//!
+//! Oba odstępy pilnujemy sami, z dat w pliku, zamiast ufać wyzwalaczowi:
+//! timer systemd, wpis w cronie i uruchomienie przy logowaniu wołają nas
+//! z różną regularnością, a logowanie potrafi zawołać trzy razy dziennie.
 
 use std::{collections::HashSet, time::Duration};
 
 use anyhow::{Context, Result};
 use jiff::{Timestamp, ToSpan};
-use mapstick_store::{Favourite, Interval, Store};
+use mapstick_store::{Favourite, InstalledSource, Interval, Store};
 
 use crate::{BRANDS, brand_index, fetch_entries};
 
-/// Ile czasu dajemy powiadomieniu na przycisk „Pokaż”, zanim uznamy, że nikt
-/// go nie naciśnie. Bez tego proces potrafiłby stać do końca świata przy
+/// Ile czasu dajemy powiadomieniu na przyciski, zanim uznamy, że nikt ich
+/// nie naciśnie. Bez tego proces potrafiłby stać do końca świata przy
 /// pulpicie, który powiadomień nie zamyka sam.
 const ACTION_WAIT: Duration = Duration::from_secs(30);
 
@@ -52,21 +57,22 @@ impl News {
 
         match &self.known {
             Some(known) => format!(
-                "{released}{}\nW aucie masz {known}.",
+                "{released}{}\nW aucie masz {known}. Przypomnę jutro, chyba że skopiujesz \
+                 nowe pliki na nośnik albo zaznaczysz, że auto już je ma.",
                 self.version
             ),
             // Bez wiedzy o aucie powiadomienie i tak ma sens — trzeba tylko
             // powiedzieć wprost, czego nie wiemy, i o co prosimy.
             None => format!(
-                "{released}{}\nNie wiem, jaka wersja jest w aucie — zaznacz ją w MapSticku, \
-                 żeby wiedzieć, czy to aktualizacja.",
+                "{released}{}\nNie wiem, jaka wersja jest w aucie — zaznacz ją, żeby było \
+                 wiadomo, czy to aktualizacja. Do tego czasu przypomnę codziennie.",
                 self.version
             ),
         }
     }
 }
 
-/// Jedno sprawdzenie. `force` pomija odstęp — do ręcznego wywołania.
+/// Jedno sprawdzenie. `force` pomija oba odstępy — do ręcznego wywołania.
 ///
 /// Pytanie do serwisu jest asynchroniczne, powiadomienie nie: `notify-rust`
 /// czeka na odpowiedź magistrali po swojemu i wewnątrz środowiska tokio kończy
@@ -100,12 +106,13 @@ async fn gather(force: bool) -> Result<Vec<News>> {
         return Ok(Vec::new());
     }
 
-    if !force && !due(&store, store.check_interval) {
-        tracing::info!("Sprawdzano niedawno — odpuszczam");
-        return Ok(Vec::new());
+    if force || due(&store, store.check_interval) {
+        check(&mut store).await;
+    } else {
+        tracing::info!("Producenta pytano niedawno — tylko przypomnienia");
     }
 
-    let news = check(&mut store).await;
+    let news = reminders(&mut store, force, Timestamp::now());
 
     // Zapis idzie przed powiadomieniami: to, czego się dowiedzieliśmy, ma
     // przetrwać nawet wtedy, gdy powiadomienia nie ma komu pokazać.
@@ -114,7 +121,7 @@ async fn gather(force: bool) -> Result<Vec<News>> {
     Ok(news)
 }
 
-/// Czy od ostatniego sprawdzenia minęło dość czasu.
+/// Czy od ostatniego pytania do producenta minęło dość czasu.
 ///
 /// Patrzymy na najświeższe sprawdzenie wśród pilnowanych modeli — także to
 /// zrobione przez samą aplikację przy uruchomieniu. Jeśli okno było otwarte
@@ -143,8 +150,8 @@ fn due(store: &Store, interval: Interval) -> bool {
     newest + span - 1.hour() <= Timestamp::now()
 }
 
-/// Odpytuje serwis i zapisuje, co zastał. Zwraca to, o czym warto powiedzieć.
-async fn check(store: &mut Store) -> Vec<News> {
+/// Odpytuje serwis i zapisuje, co zastał.
+async fn check(store: &mut Store) {
     let mut combos: Vec<(String, String)> = store
         .watched()
         .map(|f| (f.brand.clone(), f.region.clone()))
@@ -153,7 +160,6 @@ async fn check(store: &mut Store) -> Vec<News> {
     combos.dedup();
 
     let watched: HashSet<String> = store.watched().map(|f| f.model_id.clone()).collect();
-    let mut news = Vec::new();
 
     for (brand, region) in combos {
         let code = BRANDS[brand_index(&brand)].as_code_str();
@@ -183,32 +189,56 @@ async fn check(store: &mut Store) -> Vec<News> {
                 continue;
             };
 
-            favourite.latest_seen_version = Some(version.clone());
+            favourite.latest_seen_version = Some(version);
             favourite.latest_checked_at = Some(mapstick_store::now());
             if !entry.released.is_empty() {
                 favourite.latest_released = Some(entry.released.clone());
             }
-
-            if let Some(item) = worth_saying(favourite, &version) {
-                favourite.notified_version = Some(version);
-                news.push(item);
-            }
         }
+    }
+}
+
+/// Wydania, o których trzeba dziś przypomnieć. Zapisuje, że przypomniano.
+fn reminders(store: &mut Store, force: bool, now: Timestamp) -> Vec<News> {
+    let mut news = Vec::new();
+
+    for favourite in store.items.iter_mut().filter(|f| f.watch) {
+        let Some(item) = worth_saying(favourite, force, now) else {
+            continue;
+        };
+
+        favourite.notified_version = Some(item.version.clone());
+        favourite.notified_at = Some(now.to_string());
+        news.push(item);
     }
 
     news
 }
 
-/// Czy to wydanie zasługuje na powiadomienie.
-fn worth_saying(favourite: &Favourite, version: &str) -> Option<News> {
-    // O tym wydaniu już mówiliśmy. Powtarzanie co tydzień tego samego uczy
-    // ludzi wyłączać powiadomienia.
-    if favourite.notified_version.as_deref() == Some(version) {
+/// Czy dziś należy się przypomnienie o wydaniu wystawionym przez producenta.
+///
+/// Sprawa jest otwarta, dopóki auto nie ma tego numeru — czy to dlatego, że
+/// ma starszy, czy dlatego, że nie wiemy, co ma. Zamyka ją zapis na nośnik
+/// (aplikacja odczytuje wtedy numer z pliku `.ver`) albo ręczne zaznaczenie.
+/// Otwarta sprawa przypomina o sobie raz na dobę.
+fn worth_saying(favourite: &Favourite, force: bool, now: Timestamp) -> Option<News> {
+    let version = favourite.latest_seen_version.as_deref()?;
+
+    // Auto ma to, co wystawia producent — nie ma o czym mówić.
+    if favourite.known_version() == Some(version) {
         return None;
     }
 
-    // Auto ma to, co wystawia producent.
-    if favourite.known_version() == Some(version) {
+    // Nowszy numer niż ten, o którym mówiliśmy, zasługuje na głos od razu.
+    // Ten sam — dopiero po dobie.
+    let same = favourite.notified_version.as_deref() == Some(version);
+    let recent = favourite
+        .notified_at
+        .as_deref()
+        .and_then(|t| t.parse::<Timestamp>().ok())
+        .is_some_and(|t| t + 24.hours() - 1.hour() > now);
+
+    if same && recent && !force {
         return None;
     }
 
@@ -221,6 +251,29 @@ fn worth_saying(favourite: &Favourite, version: &str) -> Option<News> {
     })
 }
 
+/// Zapisuje, że auto ma już to wydanie — z przycisku w powiadomieniu.
+///
+/// Osobny proces, osobna blokada: okno aplikacji może być w tym czasie otwarte
+/// i sięgać po ten sam plik.
+fn mark_installed(model_id: &str, version: &str) -> Result<()> {
+    let path = mapstick_store::default_path();
+    let _lock = mapstick_store::lock(&path)?;
+    let mut store = Store::load(&path)?;
+
+    let Some(favourite) = store.get_mut(model_id) else {
+        return Ok(());
+    };
+
+    favourite.installed_version = Some(version.to_owned());
+    favourite.installed_source = Some(InstalledSource::Manual);
+    favourite.installed_confirmed = true;
+
+    store.save(&path)?;
+    tracing::info!("{model_id}: zaznaczone, że auto ma {version}");
+
+    Ok(())
+}
+
 /// Pokazuje powiadomienie systemowe.
 fn announce(news: &News) -> Result<()> {
     let mut notification = notify_rust::Notification::new();
@@ -230,23 +283,30 @@ fn announce(news: &News) -> Result<()> {
         .appname("MapStick")
         .timeout(notify_rust::Timeout::Milliseconds(20_000));
 
-    show(notification, &news.model_id)
+    show(notification, news)
 }
 
 #[cfg(target_os = "linux")]
-fn show(mut notification: notify_rust::Notification, model_id: &str) -> Result<()> {
-    let handle = notification.action("pokaz", "Pokaż").show()?;
+fn show(mut notification: notify_rust::Notification, news: &News) -> Result<()> {
+    let handle = notification
+        .action("pokaz", "Pokaż")
+        .action("mam", "Auto już to ma")
+        .show()?;
 
     // Czekanie na kliknięcie odbywa się w osobnym wątku, żeby pulpit, który
     // powiadomień nie zamyka, nie zatrzymał nas na zawsze.
     let (tx, rx) = std::sync::mpsc::channel();
-    let model_id = model_id.to_owned();
+    let (model_id, version) = (news.model_id.clone(), news.version.clone());
 
     std::thread::spawn(move || {
-        handle.wait_for_action(|action| {
-            if action == "pokaz" {
-                open_app(&model_id);
+        handle.wait_for_action(|action| match action {
+            "pokaz" => open_app(&model_id),
+            "mam" => {
+                if let Err(e) = mark_installed(&model_id, &version) {
+                    tracing::warn!("Nie udało się zapisać wersji w aucie: {e:#}");
+                }
             }
+            _ => {}
         });
         let _ = tx.send(());
     });
@@ -257,7 +317,7 @@ fn show(mut notification: notify_rust::Notification, model_id: &str) -> Result<(
 }
 
 #[cfg(not(target_os = "linux"))]
-fn show(mut notification: notify_rust::Notification, _model_id: &str) -> Result<()> {
+fn show(mut notification: notify_rust::Notification, _news: &News) -> Result<()> {
     notification.show()?;
     Ok(())
 }
@@ -297,7 +357,7 @@ mod tests {
             region: "EU".to_owned(),
             model_id: "New_IONIQ5_EUR".to_owned(),
             model_name: "IONIQ 5".to_owned(),
-            latest_seen_version: None,
+            latest_seen_version: Some("NE1.002".to_owned()),
             latest_checked_at: None,
             latest_released: Some("2026.07".to_owned()),
             downloaded_version: None,
@@ -308,13 +368,18 @@ mod tests {
             vin: None,
             watch: true,
             notified_version: None,
+            notified_at: None,
         }
+    }
+
+    fn now() -> Timestamp {
+        Timestamp::now()
     }
 
     /// Nie wiemy, co w aucie — mówimy o wydaniu i prosimy o zaznaczenie wersji.
     #[test]
     fn an_unknown_car_still_gets_told() {
-        let news = worth_saying(&favourite(), "NE1.002").unwrap();
+        let news = worth_saying(&favourite(), false, now()).unwrap();
 
         assert_eq!(news.known, None);
         assert!(news.body().contains("Nie wiem, jaka wersja jest w aucie"));
@@ -326,7 +391,7 @@ mod tests {
         let mut f = favourite();
         f.installed_version = Some("NE1.002".to_owned());
 
-        assert_eq!(worth_saying(&f, "NE1.002"), None);
+        assert_eq!(worth_saying(&f, false, now()), None);
     }
 
     #[test]
@@ -334,18 +399,68 @@ mod tests {
         let mut f = favourite();
         f.installed_version = Some("NE1.001".to_owned());
 
-        let news = worth_saying(&f, "NE1.002").unwrap();
+        let news = worth_saying(&f, false, now()).unwrap();
         assert!(news.body().contains("W aucie masz NE1.001."));
     }
 
-    /// To samo wydanie mówi się raz.
+    /// Sedno: przypomnienie wraca po dobie, nie po godzinie.
     #[test]
-    fn a_release_already_announced_stays_quiet() {
+    fn the_same_release_is_repeated_daily_but_not_hourly() {
         let mut f = favourite();
         f.notified_version = Some("NE1.002".to_owned());
 
-        assert_eq!(worth_saying(&f, "NE1.002"), None);
-        assert!(worth_saying(&f, "NE1.003").is_some());
+        f.notified_at = Some((now() - 2.hours()).to_string());
+        assert_eq!(worth_saying(&f, false, now()), None, "dwie godziny to za wcześnie");
+
+        f.notified_at = Some((now() - 25.hours()).to_string());
+        assert!(worth_saying(&f, false, now()).is_some(), "po dobie należy się");
+    }
+
+    /// Nowszy numer nie czeka na dobę — to inna wiadomość.
+    #[test]
+    fn a_newer_release_is_announced_at_once() {
+        let mut f = favourite();
+        f.notified_version = Some("NE1.001".to_owned());
+        f.notified_at = Some(now().to_string());
+
+        assert!(worth_saying(&f, false, now()).is_some());
+    }
+
+    /// Koniec przypominania: auto ma wersję — czy to z nośnika, czy z ręki.
+    #[test]
+    fn reminders_stop_once_the_car_has_it() {
+        let mut f = favourite();
+        f.notified_version = Some("NE1.002".to_owned());
+        f.notified_at = Some((now() - 48.hours()).to_string());
+        f.installed_version = Some("NE1.002".to_owned());
+
+        assert_eq!(worth_saying(&f, false, now()), None);
+    }
+
+    /// Wymuszone sprawdzenie mówi od razu, choćby mówiło przed chwilą.
+    #[test]
+    fn a_forced_run_repeats_regardless() {
+        let mut f = favourite();
+        f.notified_version = Some("NE1.002".to_owned());
+        f.notified_at = Some(now().to_string());
+
+        assert!(worth_saying(&f, true, now()).is_some());
+    }
+
+    #[test]
+    fn reminders_are_written_down_when_given() {
+        let mut store = Store::default();
+        store.upsert(favourite());
+
+        let news = reminders(&mut store, false, now());
+        assert_eq!(news.len(), 1);
+
+        let f = store.find("New_IONIQ5_EUR").unwrap();
+        assert_eq!(f.notified_version.as_deref(), Some("NE1.002"));
+        assert!(f.notified_at.is_some());
+
+        // Druga runda tego samego dnia milczy.
+        assert!(reminders(&mut store, false, now()).is_empty());
     }
 
     #[test]
