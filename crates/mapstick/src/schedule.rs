@@ -35,14 +35,23 @@ pub enum Kind {
     Systemd,
     Cron,
     Autostart,
+    /// Windows: zadanie Harmonogramu zadań (`schtasks`).
+    #[allow(dead_code)] // konstruowany tylko w cfg(target_os = "windows")
+    TaskScheduler,
+    /// macOS: agent launchd użytkownika.
+    #[allow(dead_code)] // konstruowany tylko w cfg(target_os = "macos")
+    Launchd,
 }
 
 impl Kind {
+    /// Angielski klucz tłumaczenia — patrz [`crate::i18n`].
     pub fn label(self) -> &'static str {
         match self {
-            Kind::Systemd => "timer systemd",
-            Kind::Cron => "wpis w cronie",
-            Kind::Autostart => "uruchomienie przy logowaniu",
+            Kind::Systemd => "a systemd timer",
+            Kind::Cron => "a cron entry",
+            Kind::Autostart => "startup at login",
+            Kind::TaskScheduler => "a Task Scheduler task",
+            Kind::Launchd => "a launchd agent",
         }
     }
 }
@@ -296,19 +305,224 @@ mod linux {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "windows")]
+pub use windows::{current, install, remove};
+
+// UWAGA: pisane i przeglądane bez dostępu do Windows — nieprzetestowane na
+// żywym systemie. Sama komenda `schtasks` jest stabilna od dawna, ale przed
+// wydaniem warto to sprawdzić na prawdziwej maszynie.
+#[cfg(target_os = "windows")]
+mod windows {
+    use super::*;
+    use std::process::{Command, Stdio};
+
+    /// Nazwa zadania w Harmonogramie zadań.
+    const TASK_NAME: &str = "MapStick sprawdzanie";
+
+    /// Godzina uruchomienia, wybrana raz przy zakładaniu zadania — to nasz
+    /// odpowiednik `RandomizedDelaySec` z systemd: różni użytkownicy trafiają
+    /// w różne godziny, ale bez zmiennej `OnCalendar` po stronie schtasks
+    /// samo zadanie nie losuje ponownie przy każdym uruchomieniu.
+    fn random_hour() -> u32 {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let seed = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
+            .unwrap_or(0);
+
+        3 + (seed % 4) // 03:00–06:00
+    }
+
+    fn schtasks(args: &[&str]) -> Result<std::process::Output> {
+        Command::new("schtasks")
+            .args(args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .context("Nie udało się uruchomić schtasks")
+    }
+
+    pub fn install(_interval: Interval) -> Result<Kind> {
+        let _ = remove();
+
+        let exe = binary()?;
+        let exe = exe.to_string_lossy();
+        let time = format!("{:02}:00", random_hour());
+        // Cudzysłów wokół ścieżki: nazwy użytkowników bywają ze spacją
+        // („C:\Users\Jan Kowalski\...”), a schtasks tnie po pierwszej.
+        let action = format!("\"{exe}\" --sprawdz");
+
+        let output = schtasks(&[
+            "/Create",
+            "/TN",
+            TASK_NAME,
+            "/TR",
+            &action,
+            "/SC",
+            "DAILY",
+            "/ST",
+            &time,
+            // Uprawnienia zwykłego użytkownika — to sprawdzenie ma prawo
+            // czytać jego plik ulubionych, niczego więcej.
+            "/RL",
+            "LIMITED",
+            "/F",
+        ])?;
+
+        if !output.status.success() {
+            return Err(anyhow!(
+                "schtasks /Create zwróciło {}: {}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+
+        Ok(Kind::TaskScheduler)
+    }
+
+    pub fn remove() -> Result<()> {
+        let _ = schtasks(&["/Delete", "/TN", TASK_NAME, "/F"]);
+        Ok(())
+    }
+
+    pub fn current() -> Option<Kind> {
+        schtasks(&["/Query", "/TN", TASK_NAME])
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|_| Kind::TaskScheduler)
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub use macos::{current, install, remove};
+
+// UWAGA: pisane i przeglądane bez dostępu do macOS — nieprzetestowane na
+// żywym systemie. `launchctl load`/`unload` i format property list są
+// stabilne od dawna, ale przed wydaniem warto to sprawdzić na prawdziwym
+// Maku.
+#[cfg(target_os = "macos")]
+mod macos {
+    use super::*;
+    use std::process::{Command, Stdio};
+
+    /// Odwrócona domena jak w każdym identyfikatorze launchd.
+    const LABEL: &str = "com.mapstick.sprawdzanie";
+
+    fn agents_dir() -> PathBuf {
+        std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir)
+            .join("Library")
+            .join("LaunchAgents")
+    }
+
+    fn plist_path() -> PathBuf {
+        agents_dir().join(format!("{LABEL}.plist"))
+    }
+
+    fn launchctl(args: &[&str]) -> Result<std::process::Output> {
+        Command::new("launchctl")
+            .args(args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .context("Nie udało się uruchomić launchctl")
+    }
+
+    fn random_hour() -> u32 {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let seed = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
+            .unwrap_or(0);
+
+        3 + (seed % 4) // 03:00–06:00, z tego samego powodu co na Windows.
+    }
+
+    pub fn install(_interval: Interval) -> Result<Kind> {
+        let _ = remove();
+
+        let directory = agents_dir();
+        std::fs::create_dir_all(&directory)
+            .with_context(|| format!("Nie udało się utworzyć {}", directory.display()))?;
+
+        let exe = binary()?;
+        let hour = random_hour();
+
+        let plist = format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+             <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \
+             \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
+             <plist version=\"1.0\">\n\
+             <dict>\n\
+             \t<key>Label</key>\n\
+             \t<string>{LABEL}</string>\n\
+             \t<key>ProgramArguments</key>\n\
+             \t<array>\n\
+             \t\t<string>{exe}</string>\n\
+             \t\t<string>--sprawdz</string>\n\
+             \t</array>\n\
+             \t<key>StartCalendarInterval</key>\n\
+             \t<dict>\n\
+             \t\t<key>Hour</key>\n\
+             \t\t<integer>{hour}</integer>\n\
+             \t\t<key>Minute</key>\n\
+             \t\t<integer>0</integer>\n\
+             \t</dict>\n\
+             \t<key>RunAtLoad</key>\n\
+             \t<true/>\n\
+             \t<key>StandardOutPath</key>\n\
+             \t<string>/dev/null</string>\n\
+             \t<key>StandardErrorPath</key>\n\
+             \t<string>/dev/null</string>\n\
+             </dict>\n\
+             </plist>\n",
+            exe = exe.display(),
+        );
+
+        let path = plist_path();
+        std::fs::write(&path, plist)
+            .with_context(|| format!("Nie udało się zapisać {}", path.display()))?;
+
+        let output = launchctl(&["load", "-w", &path.to_string_lossy()])?;
+        if !output.status.success() {
+            return Err(anyhow!(
+                "launchctl load zwróciło {}: {}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+
+        Ok(Kind::Launchd)
+    }
+
+    pub fn remove() -> Result<()> {
+        let path = plist_path();
+
+        if path.exists() {
+            let _ = launchctl(&["unload", "-w", &path.to_string_lossy()]);
+            let _ = std::fs::remove_file(&path);
+        }
+
+        Ok(())
+    }
+
+    pub fn current() -> Option<Kind> {
+        plist_path().exists().then_some(Kind::Launchd)
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 pub use other::{current, install, remove};
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 mod other {
     use super::*;
 
-    /// Windows (Harmonogram zadań) i macOS (launchd) czekają na swoją kolej
-    /// razem z resztą wsparcia dla tych systemów.
     pub fn install(_interval: Interval) -> Result<Kind> {
-        Err(anyhow!(
-            "Automatyczne sprawdzanie działa na razie tylko na Linuksie"
-        ))
+        Err(anyhow!("Automatic checking is not available on this platform"))
     }
 
     pub fn remove() -> Result<()> {
