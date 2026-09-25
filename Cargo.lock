@@ -3322,6 +3322,7 @@ dependencies = [
  "serde_json",
  "slint",
  "slint-build",
+ "sys-locale",
  "tempfile",
  "tokio",
  "tracing",

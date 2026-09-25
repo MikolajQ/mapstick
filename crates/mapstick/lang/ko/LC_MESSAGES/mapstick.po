@@ -1,0 +1,473 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: mapstick\n"
+"POT-Creation-Date: 2026-09-25 12:00+0000\n"
+"PO-Revision-Date: 2026-09-25 12:00+0000\n"
+"Last-Translator: MikolajQ\n"
+"Language-Team: Korean\n"
+"Language: ko\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Brand"
+msgstr "제조사"
+
+msgid "Region"
+msgstr "지역"
+
+msgid "Loading…"
+msgstr "불러오는 중…"
+
+msgid "Filter: name, model ID or version…"
+msgstr "필터: 이름, 모델 ID 또는 버전…"
+
+msgid "{} of {}"
+msgstr "{} / {}"
+
+msgid "NAME"
+msgstr "이름"
+
+msgid "MODEL ID"
+msgstr "모델 ID"
+
+msgid "VERSION"
+msgstr "버전"
+
+msgid "MEDIA"
+msgstr "미디어"
+
+msgid "Pick a model from the list to see its size and prepare a medium."
+msgstr "목록에서 모델을 선택하면 용량을 확인하고 저장 장치를 준비할 수 있습니다."
+
+msgid "Remove from favourites"
+msgstr "즐겨찾기에서 제거"
+
+msgid "Add to favourites"
+msgstr "즐겨찾기에 추가"
+
+msgid "{}   ·   media {}"
+msgstr "{}   ·   미디어 {}"
+
+msgid "   ·   latest release {}"
+msgstr "   ·   최신 릴리스 {}"
+
+msgid "watch for updates"
+msgstr "업데이트 감시"
+
+msgid "every:"
+msgstr "주기:"
+
+msgid "in the car:"
+msgstr "차량 내:"
+
+msgid "Download and prepare a medium →"
+msgstr "다운로드 후 저장 장치 준비 →"
+
+msgid "← Back to the list"
+msgstr "← 목록으로 돌아가기"
+
+msgid "Looking…"
+msgstr "검색 중…"
+
+msgid "Refresh"
+msgstr "새로고침"
+
+msgid "Looking for media…"
+msgstr "미디어 검색 중…"
+
+msgid "No removable medium found."
+msgstr "이동식 저장 장치를 찾을 수 없습니다."
+
+msgid ""
+"Plug in a USB stick and press “Refresh”. Internal disks and disks\n"
+"holding an operating system are skipped on purpose."
+msgstr ""
+"USB 메모리를 연결한 후 “새로고침”을 누르세요. 내부 디스크와\n"
+"운영 체제가 설치된 디스크는 의도적으로 건너뜁니다."
+
+msgid "found: {}"
+msgstr "발견됨: {}"
+
+msgid "Remove old maps ({})"
+msgstr "이전 지도 제거 ({})"
+
+msgid "Format as exFAT"
+msgstr "exFAT로 포맷"
+
+msgid "Resume"
+msgstr "재개"
+
+msgid "Cancel and clean up"
+msgstr "취소하고 정리"
+
+msgid "Copy to the medium"
+msgstr "저장 장치로 복사"
+
+msgid "Download"
+msgstr "다운로드"
+
+msgid "Download again"
+msgstr "다시 다운로드"
+
+msgid "Pause"
+msgstr "일시 중지"
+
+msgid "Cancel"
+msgstr "취소"
+
+msgid "Download straight to the removable medium, bypassing the hard disk"
+msgstr "하드 디스크를 거치지 않고 이동식 저장 장치로 바로 다운로드"
+
+msgid "Other folder…"
+msgstr "다른 폴더…"
+
+msgid "Pick a medium from the list above or choose another folder."
+msgstr "위 목록에서 저장 장치를 선택하거나 다른 폴더를 지정하세요."
+
+msgid "This firmware is already on the hard disk — no need to download it twice."
+msgstr "이 펌웨어는 이미 하드 디스크에 있습니다 — 두 번 다운로드할 필요가 없습니다."
+
+msgid "delete from the disk after copying"
+msgstr "복사 후 디스크에서 삭제"
+
+msgid "The current version is already in the chosen place."
+msgstr "선택한 위치에 이미 현재 버전이 있습니다."
+
+msgid "Leftover archives on the disk: {}"
+msgstr "디스크에 남은 압축 파일: {}"
+
+msgid "Clear"
+msgstr "지우기"
+
+msgid "Download the same thing again?"
+msgstr "같은 것을 다시 다운로드할까요?"
+
+msgid "Downloading skips files that are already there, so they have to be removed first. Only what this model’s .ver file lists will be deleted — nothing else in that place is touched."
+msgstr "다운로드는 이미 있는 파일을 건너뛰므로 먼저 삭제해야 합니다. 이 모델의 .ver 파일에 나열된 것만 삭제되며, 그 외의 파일은 건드리지 않습니다."
+
+msgid "Delete and download"
+msgstr "삭제 후 다운로드"
+
+msgid "Erase everything on this medium?"
+msgstr "이 저장 장치의 모든 내용을 지울까요?"
+
+msgid "Formatting as exFAT removes all data from this medium for good. Make sure the drive shown is the one you have in mind."
+msgstr "exFAT로 포맷하면 이 저장 장치의 모든 데이터가 영구적으로 삭제됩니다. 표시된 드라이브가 원하는 것이 맞는지 확인하세요."
+
+msgid "Formatting…"
+msgstr "포맷 중…"
+
+msgid "Format"
+msgstr "포맷"
+
+msgid "Europe"
+msgstr "유럽"
+
+msgid "Brazil"
+msgstr "브라질"
+
+msgid "Canada"
+msgstr "캐나다"
+
+msgid "Indonesia"
+msgstr "인도네시아"
+
+msgid "India"
+msgstr "인도"
+
+msgid "Japan"
+msgstr "일본"
+
+msgid "South Korea"
+msgstr "대한민국"
+
+msgid "Middle East"
+msgstr "중동"
+
+msgid "New Zealand"
+msgstr "뉴질랜드"
+
+msgid "Russia and CIS"
+msgstr "러시아·독립국가연합"
+
+msgid "Singapore"
+msgstr "싱가포르"
+
+msgid "Türkiye"
+msgstr "튀르키예"
+
+msgid "United States"
+msgstr "미국"
+
+msgid "This model is published for several head-unit variants (e.g. ccNC and ccNC Lite). The files to download are identical for all of them — pick the number you see on the car’s screen."
+msgstr "이 모델은 여러 헤드유닛 버전(예: ccNC, ccNC Lite)으로 배포됩니다. 다운로드할 파일은 모두 동일하니, 차량 화면에 표시된 번호를 선택하세요."
+
+msgid "{} - {}"
+msgstr "{} - {}"
+
+msgid "don’t know"
+msgstr "모름"
+
+msgid "  ·  written in the .ver file"
+msgstr "  ·  .ver 파일에 기록됨"
+
+msgid "  ·  we downloaded this"
+msgstr "  ·  다운로드한 버전"
+
+msgid "1 model"
+msgstr "모델 1개"
+
+msgid "{} models"
+msgstr "모델 {}개"
+
+msgid "Asking the maker {} (watched: {}); a new release is brought up daily — woken by {}."
+msgstr "{} 제조사에 문의 중 (감시 중: {}); 새 릴리스는 매일 알려드립니다 — 실행 방식: {}."
+
+msgid "No way to check in the background — the schedule was not set up."
+msgstr "백그라운드에서 확인할 방법이 없습니다 — 일정이 설정되지 않았습니다."
+
+msgid "Watching {} — I will let you know when a new release appears."
+msgstr "{} 감시 중 — 새 릴리스가 나오면 알려드리겠습니다."
+
+msgid "No longer watching {}."
+msgstr "{} 감시를 중단했습니다."
+
+msgid "Asking the maker {}."
+msgstr "{} 제조사에 문의합니다."
+
+msgid "{} Woken by {}."
+msgstr "{} 실행 방식: {}."
+
+msgid "{} The schedule could not be set up, though: {}"
+msgstr "{} 하지만 일정을 설정하지 못했습니다: {}"
+
+msgid "{}: the car has {}."
+msgstr "{}: 차량 버전은 {}입니다."
+
+msgid "{}: unknown what the car has."
+msgstr "{}: 차량 버전을 알 수 없습니다."
+
+msgid "{} removed from favourites."
+msgstr "{}을(를) 즐겨찾기에서 제거했습니다."
+
+msgid "{} added to favourites."
+msgstr "{}을(를) 즐겨찾기에 추가했습니다."
+
+msgid "checking the size…"
+msgstr "용량 확인 중…"
+
+msgid "{} to download · files: {}"
+msgstr "다운로드 {} · 파일 수: {}"
+
+msgid "{} · files: {}"
+msgstr "{} · 파일 수: {}"
+
+msgid "{} to download, {} on the medium · files: {}"
+msgstr "다운로드 {}, 저장 장치에 {} · 파일 수: {}"
+
+msgid "There are no files of a previous release there."
+msgstr "이전 릴리스 파일이 없습니다."
+
+msgid "Removed {} files of the previous release — {} recovered."
+msgstr "이전 릴리스 파일 {}개 삭제 — {} 확보."
+
+msgid ""
+"{}\n"
+"To be removed: {} files, {}"
+msgstr ""
+"{}\n"
+"삭제할 항목: 파일 {}개, {}"
+
+msgid "Leftover archives removed."
+msgstr "남은 압축 파일을 삭제했습니다."
+
+msgid "Nothing to remove."
+msgstr "삭제할 항목이 없습니다."
+
+msgid "Could not clean up: {}"
+msgstr "정리하지 못했습니다: {}"
+
+msgid "not mounted"
+msgstr "마운트되지 않음"
+
+msgid "needs exFAT"
+msgstr "exFAT 필요"
+
+msgid "the medium already holds the current version"
+msgstr "저장 장치에 이미 현재 버전이 있습니다"
+
+msgid "not enough space"
+msgstr "공간 부족"
+
+msgid "The removable medium holds a different firmware version; it will be removed once the current one is downloaded"
+msgstr "이동식 저장 장치에 다른 버전의 펌웨어가 있습니다. 현재 버전을 다운로드하면 삭제됩니다"
+
+msgid "ready"
+msgstr "준비됨"
+
+msgid "{} · free {} of {}{}"
+msgstr "{} · 여유 공간 {} / {}{}"
+
+msgid "no file system"
+msgstr "파일 시스템 없음"
+
+msgid "No removable medium found. Internal and system disks are skipped."
+msgstr "이동식 저장 장치를 찾을 수 없습니다. 내부 디스크와 시스템 디스크는 건너뜁니다."
+
+msgid "Media found: {}."
+msgstr "찾은 미디어: {}개."
+
+msgid "Could not detect media: {}"
+msgstr "미디어를 감지하지 못했습니다: {}"
+
+msgid "This medium is not mounted — plug it in again or mount it."
+msgstr "이 저장 장치가 마운트되지 않았습니다 — 다시 연결하거나 마운트하세요."
+
+msgid "Formatting {} as exFAT…"
+msgstr "{}을(를) exFAT로 포맷하는 중…"
+
+msgid "{} formatted as exFAT."
+msgstr "{}을(를) exFAT로 포맷했습니다."
+
+msgid "Formatting failed: {}"
+msgstr "포맷 실패: {}"
+
+msgid "Download finished. Checksums verified."
+msgstr "다운로드 완료. 체크섬을 확인했습니다."
+
+msgid "Download failed: {}"
+msgstr "다운로드 실패: {}"
+
+msgid "There is no ready firmware for this model on the disk."
+msgstr "디스크에 이 모델의 준비된 펌웨어가 없습니다."
+
+msgid "No medium chosen."
+msgstr "저장 장치를 선택하지 않았습니다."
+
+msgid "No model chosen."
+msgstr "모델을 선택하지 않았습니다."
+
+msgid "The medium has {} free and the data takes {}."
+msgstr "저장 장치의 여유 공간은 {}이고 데이터 용량은 {}입니다."
+
+msgid "Copied to the medium."
+msgstr "저장 장치로 복사했습니다."
+
+msgid "Copied to the medium; the copy on the disk removed."
+msgstr "저장 장치로 복사했습니다. 디스크의 사본은 삭제했습니다."
+
+msgid "Copied to the medium, but the copy on the disk was not removed — I could not confirm they match. Check the medium and remove it by hand."
+msgstr "저장 장치로 복사했지만 디스크의 사본은 삭제하지 않았습니다 — 일치 여부를 확인할 수 없었습니다. 저장 장치를 확인한 후 직접 삭제하세요."
+
+msgid "Copying interrupted. The medium does not hold complete data."
+msgstr "복사가 중단되었습니다. 저장 장치에 완전한 데이터가 없습니다."
+
+msgid "Copying failed: {}"
+msgstr "복사 실패: {}"
+
+msgid "Copying interrupted: {}"
+msgstr "복사 중단: {}"
+
+msgid "Interrupting the copy…"
+msgstr "복사를 중단하는 중…"
+
+msgid "Download paused. Click “Resume” to carry on from here."
+msgstr "다운로드가 일시 중지되었습니다. “재개”를 클릭하면 이어서 진행합니다."
+
+msgid "Download cancelled — leftovers removed: {}."
+msgstr "다운로드를 취소했습니다 — 남은 파일 삭제: {}."
+
+msgid "Could not load favourites: {}"
+msgstr "즐겨찾기를 불러오지 못했습니다: {}"
+
+msgid "Pick a brand and a region — the model list loads by itself."
+msgstr "제조사와 지역을 선택하면 모델 목록이 자동으로 불러와집니다."
+
+msgid "Could not fetch the list: {}"
+msgstr "목록을 가져오지 못했습니다: {}"
+
+msgid "Could not fetch the details: {}"
+msgstr "상세 정보를 가져오지 못했습니다: {}"
+
+msgid "Fetching the model list…"
+msgstr "모델 목록을 가져오는 중…"
+
+msgid "size unknown"
+msgstr "용량 알 수 없음"
+
+msgid "This is not an update link."
+msgstr "업데이트 링크가 아닙니다."
+
+msgid "Recognising the link from the maker’s site…"
+msgstr "제조사 사이트의 링크를 확인하는 중…"
+
+msgid "I don’t recognise this link. I checked {} in these regions: {}. If the car is from another region, pick it from the list and click again."
+msgstr "이 링크를 인식할 수 없습니다. 다음 지역에서 {}을(를) 확인했습니다: {}. 차량이 다른 지역 사양이라면 목록에서 선택한 후 다시 클릭하세요."
+
+msgid "{} — {} to write"
+msgstr "{} — 기록할 용량 {}"
+
+msgid "{} — size unknown"
+msgstr "{} — 용량 알 수 없음"
+
+msgid "No model chosen"
+msgstr "모델을 선택하지 않았습니다"
+
+msgid "Target folder"
+msgstr "대상 폴더"
+
+msgid "Downloaded files need unpacking, so the removable medium has to hold the archives and the unpacked result at once: about {}. Writes to the flash memory double as a result. Use this only if you have a large medium and not enough free space on the hard disk."
+msgstr "다운로드한 파일은 압축을 풀어야 하므로 이동식 저장 장치에 압축 파일과 압축 해제 결과가 동시에 있어야 합니다: 약 {}. 그 결과 플래시 메모리에 대한 쓰기 작업이 두 배가 됩니다. 저장 장치 용량이 크고 하드 디스크의 여유 공간이 부족할 때만 사용하세요."
+
+msgid "The downloaded archives ({}) go to the hard disk for the time being; only the unpacked result ({}) lands on the removable medium."
+msgstr "다운로드한 압축 파일({})은 일시적으로 하드 디스크에 저장되며, 압축을 푼 결과({})만 이동식 저장 장치로 전달됩니다."
+
+msgid "The downloaded archives will be unpacked into the chosen folder ({} needed). Once the download finishes, plug in the removable device and click “Refresh” to copy or move the data onto it."
+msgstr "다운로드한 압축 파일은 선택한 폴더에 압축이 풀립니다 (필요 용량 {}). 다운로드가 끝나면 이동식 장치를 연결하고 “새로고침”을 눌러 데이터를 복사하거나 이동하세요."
+
+msgid "a systemd timer"
+msgstr "systemd 타이머"
+
+msgid "a cron entry"
+msgstr "cron 항목"
+
+msgid "startup at login"
+msgstr "로그인 시 자동 실행"
+
+msgid "daily"
+msgstr "매일"
+
+msgid "weekly"
+msgstr "매주"
+
+msgid "monthly"
+msgstr "매월"
+
+msgid "Could not set up the rustls crypto provider."
+msgstr "rustls 암호화 제공자를 설정하지 못했습니다."
+
+msgid "{}: new map release"
+msgstr "{}: 새 지도 버전 출시"
+
+msgid ""
+"{}{}\n"
+"The car has {}. I will remind you tomorrow, unless you copy the new files onto the medium or mark the car as having it."
+msgstr ""
+"{}{}\n"
+"차량 버전은 {}입니다. 저장 장치에 새 파일을 복사하거나 차량이 이미 해당 버전을 갖고 있다고 표시하지 않으면 내일 다시 알려드리겠습니다."
+
+msgid ""
+"{}{}\n"
+"I don’t know what version is in the car — mark it, so I can tell whether this is an update. Until then, I will remind you every day."
+msgstr ""
+"{}{}\n"
+"차량에 어떤 버전이 있는지 알 수 없습니다 — 업데이트 여부를 알 수 있도록 표시해 주세요. 그때까지는 매일 알려드리겠습니다."
+
+msgid "Show"
+msgstr "보기"
+
+msgid "The car already has it"
+msgstr "차량에 이미 있음"

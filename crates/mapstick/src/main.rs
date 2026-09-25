@@ -31,6 +31,7 @@ use tokio::{
 
 mod cache;
 mod copy;
+mod i18n;
 mod instance;
 mod link;
 mod schedule;
@@ -41,19 +42,19 @@ slint::include_modules!();
 
 /// Regiony obsługiwane przez serwis producenta, w kolejności wyświetlania.
 const REGIONS: &[(&str, &str)] = &[
-    ("EU", "Europa"),
-    ("BR", "Brazylia"),
-    ("CA", "Kanada"),
-    ("ID", "Indonezja"),
-    ("IN", "Indie"),
-    ("JP", "Japonia"),
-    ("KR", "Korea Południowa"),
-    ("ME", "Bliski Wschód"),
-    ("NZ", "Nowa Zelandia"),
-    ("RU", "Rosja i WNP"),
-    ("SG", "Singapur"),
-    ("TR", "Turcja"),
-    ("US", "Stany Zjednoczone"),
+    ("EU", "Europe"),
+    ("BR", "Brazil"),
+    ("CA", "Canada"),
+    ("ID", "Indonesia"),
+    ("IN", "India"),
+    ("JP", "Japan"),
+    ("KR", "South Korea"),
+    ("ME", "Middle East"),
+    ("NZ", "New Zealand"),
+    ("RU", "Russia and CIS"),
+    ("SG", "Singapore"),
+    ("TR", "Türkiye"),
+    ("US", "United States"),
 ];
 
 const BRANDS: &[Brand] = &[Brand::Hyundai, Brand::Kia, Brand::Genesis];
@@ -221,19 +222,6 @@ fn remove_partial_archives(directory: &Path) -> u64 {
     }
 
     freed
-}
-
-/// Odmiana słowa „model” przez liczbę — polszczyzna ma trzy formy, a
-/// „1 modele/i” wygląda jak awaria, nie jak komunikat.
-fn models(count: usize) -> &'static str {
-    let (last, teens) = (count % 10, count % 100);
-
-    match (count, last, teens) {
-        (1, _, _) => "model",
-        (_, 2..=4, 12..=14) => "modeli",
-        (_, 2..=4, _) => "modele",
-        _ => "modeli",
-    }
 }
 
 /// Ile bajtów poleci przez sieć i ile zajmie na nośniku.
@@ -459,7 +447,7 @@ impl Worker {
                 // Data idzie przed wersją: przy wąskiej kolumnie skróci się
                 // wersja, a nie ona.
                 let version = match (&f.latest_released, &f.latest_seen_version) {
-                    (Some(released), Some(v)) => format!("{released} - {v}"),
+                    (Some(released), Some(v)) => tr!("{} - {}", released, v),
                     (None, Some(v)) => v.clone(),
                     (_, None) => "—".to_owned(),
                 };
@@ -521,7 +509,7 @@ impl Worker {
     /// pobraliśmy, co przeczytaliśmy z nośnika. Pierwsza pozycja to „nie wiem”,
     /// bo niewiedza jest stanem uczciwym i trzeba dać do niej wrócić.
     fn installed_options(&self) -> (Vec<SharedString>, Vec<Option<String>>, usize) {
-        let mut labels = vec![SharedString::from("nie wiem")];
+        let mut labels = vec![SharedString::from(tr!("don’t know"))];
         let mut choices: Vec<Option<String>> = vec![None];
 
         let Some(index) = self.selected else {
@@ -545,9 +533,9 @@ impl Worker {
             }
 
             let hint = if seen_on_medium.as_deref() == Some(version) {
-                "  ·  zapisane w pliku .ver"
+                i18n::tr("  ·  written in the .ver file")
             } else if downloaded.as_deref() == Some(version) {
-                "  ·  to pobraliśmy"
+                i18n::tr("  ·  we downloaded this")
             } else {
                 ""
             };
@@ -606,8 +594,11 @@ impl Worker {
 
         // Plik `.ver` nie rozstrzyga: producent zapisuje w nim zawsze pierwszy
         // numer z listy, niezależnie od tego, którą głowicę ma auto.
-        "Ten model jest wystawiony w kilku odmianach zestawu multimedialnego          (np. ccNC i ccNC Lite). Pliki do pobrania są dla nich identyczne —          numer wybierz ten, który widzisz na ekranie auta."
-            .to_owned()
+        tr!(
+            "This model is published for several head-unit variants (e.g. ccNC and \
+             ccNC Lite). The files to download are identical for all of them — pick the \
+             number you see on the car’s screen."
+        )
     }
 
     /// Zdanie o tym, kto i jak często nas budzi.
@@ -618,14 +609,20 @@ impl Worker {
             return String::new();
         }
 
+        let count_phrase = match watched {
+            1 => tr!("1 model"),
+            n => tr!("{} models", n),
+        };
+
         match schedule::current() {
-            Some(kind) => format!(
-                "Pytam producenta {} ({watched} {}), o nowym wydaniu przypominam                  codziennie — budzi mnie {}.",
-                self.store.check_interval.label(),
-                models(watched),
-                kind.label()
+            Some(kind) => tr!(
+                "Asking the maker {} (watched: {}); a new release is brought up daily — \
+                 woken by {}.",
+                i18n::tr(self.store.check_interval.label()),
+                count_phrase,
+                i18n::tr(kind.label())
             ),
-            None => "Nie mam jak sprawdzać w tle — harmonogram nie został założony.".to_owned(),
+            None => tr!("No way to check in the background — the schedule was not set up."),
         }
     }
 
@@ -646,9 +643,9 @@ impl Worker {
         self.save_store();
 
         self.sync_schedule(if on {
-            format!("Pilnuję {label} — dam znać, gdy pojawi się nowe wydanie.")
+            tr!("Watching {} — I will let you know when a new release appears.", label)
         } else {
-            format!("Przestaję pilnować {label}.")
+            tr!("No longer watching {}.", label)
         });
     }
 
@@ -660,7 +657,7 @@ impl Worker {
         self.store.check_interval = interval;
         self.save_store();
 
-        self.sync_schedule(format!("Pytam producenta {}.", interval.label()));
+        self.sync_schedule(tr!("Asking the maker {}.", i18n::tr(interval.label())));
     }
 
     /// Dostraja harmonogram do tego, czego pilnujemy, i melduje wynik.
@@ -674,10 +671,10 @@ impl Worker {
         };
 
         match outcome {
-            Ok(Some(kind)) => self.set_status(format!("{message} Budzi mnie {}.", kind.label()), false),
+            Ok(Some(kind)) => self.set_status(tr!("{} Woken by {}.", message, i18n::tr(kind.label())), false),
             Ok(None) => self.set_status(message, false),
             Err(e) => self.set_status(
-                format!("{message} Nie udało się jednak założyć harmonogramu: {e:#}"),
+                tr!("{} The schedule could not be set up, though: {}", message, format!("{e:#}")),
                 true,
             ),
         }
@@ -711,7 +708,7 @@ impl Worker {
                 // ją ma; o następnej powiemy od nowa.
                 favourite.notified_version = Some(version.clone());
 
-                self.set_status(format!("{label}: w aucie {version}."), false);
+                self.set_status(tr!("{}: the car has {}.", label, version), false);
             }
             None => {
                 favourite.installed_version = None;
@@ -721,7 +718,7 @@ impl Worker {
                 favourite.notified_version = None;
                 favourite.notified_at = None;
 
-                self.set_status(format!("{label}: nie wiadomo, co w aucie."), false);
+                self.set_status(tr!("{}: unknown what the car has.", label), false);
             }
         }
 
@@ -738,7 +735,7 @@ impl Worker {
         let car = &self.entries[index].car;
 
         if self.store.remove(&car.id) {
-            self.set_status(format!("{} usunięty z ulubionych.", car.name), false);
+            self.set_status(tr!("{} removed from favourites.", car.name), false);
         } else {
             self.store.upsert(Favourite {
                 label: car.name.clone(),
@@ -762,7 +759,7 @@ impl Worker {
                 notified_version: None,
                 notified_at: None,
             });
-            self.set_status(format!("{} dodany do ulubionych.", car.name), false);
+            self.set_status(tr!("{} added to favourites.", car.name), false);
 
             // Świeży wpis nie wie nic o wersji w aucie. Jeśli akurat jest
             // podłączony nośnik z tym firmware'em, uzupełniamy ją od razu,
@@ -991,7 +988,7 @@ impl Worker {
             ui.set_detail_version(version.into());
             ui.set_detail_media(media.into());
             ui.set_detail_released(released.into());
-            ui.set_detail_size("sprawdzam rozmiar…".into());
+            ui.set_detail_size(tr!("checking the size…").into());
             ui.set_detail_ready(true);
         });
 
@@ -1016,18 +1013,18 @@ impl Worker {
         let differ = extracted > 0 && download.abs_diff(extracted) * 50 > extracted;
 
         let size = match (extracted, differ) {
-            (0, _) => format!(
-                "{} do pobrania · plików: {}",
+            (0, _) => tr!(
+                "{} to download · files: {}",
                 format_size(download),
                 firmware.files.len()
             ),
-            (_, false) => format!(
-                "{} · plików: {}",
+            (_, false) => tr!(
+                "{} · files: {}",
                 format_size(extracted),
                 firmware.files.len()
             ),
-            (_, true) => format!(
-                "{} do pobrania, {} na nośniku · plików: {}",
+            (_, true) => tr!(
+                "{} to download, {} on the medium · files: {}",
                 format_size(download),
                 format_size(extracted),
                 firmware.files.len()
@@ -1280,7 +1277,7 @@ impl Worker {
         let stale = self.stale_on_target(&mount);
 
         if stale.is_empty() {
-            self.set_status("Nie ma tam plików poprzedniego wydania.", false);
+            self.set_status(tr!("There are no files of a previous release there."), false);
             return;
         }
 
@@ -1288,8 +1285,9 @@ impl Worker {
         let count = stale::remove(&mount, &stale);
 
         self.set_status(
-            format!(
-                "Usunięto {count} plików poprzedniego wydania — odzyskane {}.",
+            tr!(
+                "Removed {} files of the previous release — {} recovered.",
+                count,
                 format_size(bytes)
             ),
             false,
@@ -1316,8 +1314,8 @@ impl Worker {
             return;
         };
 
-        let summary = format!(
-            "{}\nDo usunięcia: {} plików, {}",
+        let summary = tr!(
+            "{}\nTo be removed: {} files, {}",
             target.display(),
             doomed.paths.len(),
             format_size(doomed.bytes)
@@ -1412,11 +1410,11 @@ impl Worker {
         let work = cache::base();
 
         match std::fs::remove_dir_all(&work) {
-            Ok(()) => self.set_status("Pozostałości archiwów usunięte.", false),
+            Ok(()) => self.set_status(tr!("Leftover archives removed."), false),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                self.set_status("Nie ma czego usuwać.", false)
+                self.set_status(tr!("Nothing to remove."), false)
             }
-            Err(e) => self.set_status(format!("Nie udało się posprzątać: {e}"), true),
+            Err(e) => self.set_status(tr!("Could not clean up: {}", e), true),
         }
 
         self.push_leftovers();
@@ -1436,11 +1434,11 @@ impl Worker {
 
         let (note, warning) = if self.direct_to_medium {
             (
-                format!(
-                    "Pobrane pliki wymagają rozpakowania i nośnik wymienny musi pomieścić \
-                     naraz archiwa i wynik ich rozpakowywania: ok. {}. Zapis na kość pamięci \
-                     jest przez to podwojony. Używaj tylko, jeśli masz duży nośnik i nie masz \
-                     dość wolnego miejsca na dysku twardym.",
+                tr!(
+                    "Downloaded files need unpacking, so the removable medium has to hold \
+                     the archives and the unpacked result at once: about {}. Writes to the \
+                     flash memory double as a result. Use this only if you have a large \
+                     medium and not enough free space on the hard disk.",
                     format_size(download + extracted)
                 ),
                 true,
@@ -1460,18 +1458,17 @@ impl Worker {
 
             (
                 (if self.target_is_medium() {
-                        format!(
-                            "Pobrane archiwa ({}) trafią tymczasowo na dysk twardy, a na nośnik \
-                             wymienny trafi tylko wynik ich rozpakowywania ({}).",
+                        tr!(
+                            "The downloaded archives ({}) go to the hard disk for the time \
+                             being; only the unpacked result ({}) lands on the removable medium.",
                             format_size(download),
                             format_size(extracted)
                         )
                     } else {
-                        format!(
-                            "Pobrane archiwa zostaną rozpakowane do wybranego katalogu \
-                             (potrzeba {}). Po zakończeniu pobierania podłącz urządzenie \
-                             przenośne i kliknij „Odśwież” celem skopiowania lub przeniesienia \
-                             danych na podpięty nośnik.",
+                        tr!(
+                            "The downloaded archives will be unpacked into the chosen folder \
+                             ({} needed). Once the download finishes, plug in the removable \
+                             device and click “Refresh” to copy or move the data onto it.",
                             format_size(extracted)
                         )
                     }),
@@ -1525,24 +1522,25 @@ impl Worker {
                 let other_version = found.is_some() && !same_version && target.is_some();
 
                 let (status, usable) = match () {
-                    _ if m.mount_point.is_none() => ("niezamontowany".to_owned(), false),
-                    _ if !m.is_exfat() => ("wymaga exFAT".to_owned(), false),
+                    _ if m.mount_point.is_none() => (tr!("not mounted"), false),
+                    _ if !m.is_exfat() => (tr!("needs exFAT"), false),
                     // Ta sama wersja: nudl pominie wszystkie pliki, więc
                     // pobieranie skończy się natychmiast i niczego nie zmieni.
-                    _ if same_version => ("na nośniku jest już bieżąca wersja".to_owned(), true),
-                    _ if needed > 0 && !m.fits(needed) => ("za mało miejsca".to_owned(), false),
+                    _ if same_version => (tr!("the medium already holds the current version"), true),
+                    _ if needed > 0 && !m.fits(needed) => (tr!("not enough space"), false),
                     // Prawie wszystkie pliki mają stałe ścieżki, więc nowe
                     // wydanie nadpisze je w miejscu; osierocone zostaje głównie
                     // archiwum map, bo jego nazwa niesie numer bazy. Auto go nie
                     // zainstaluje — czyta manifest — więc to kwestia miejsca,
                     // nie poprawności.
                     _ if other_version => (
-                        "Na nośniku wymiennym znajduje się inna wersja oprogramowania \
-                         i zostanie usunięta po pobraniu aktualnej"
-                            .to_owned(),
+                        tr!(
+                            "The removable medium holds a different firmware version; it \
+                             will be removed once the current one is downloaded"
+                        ),
                         true,
                     ),
-                    _ => ("gotowy".to_owned(), true),
+                    _ => (tr!("ready"), true),
                 };
 
                 let (installed_model, installed_version) = found
@@ -1557,9 +1555,9 @@ impl Worker {
                     .map(|s| format_size(s.bytes))
                     .unwrap_or_default();
 
-                let details = format!(
-                    "{} · wolne {} z {}{}",
-                    m.filesystem.as_deref().unwrap_or("brak systemu plików"),
+                let details = tr!(
+                    "{} · free {} of {}{}",
+                    m.filesystem.as_deref().unwrap_or(i18n::tr("no file system")),
                     format_size(m.free_bytes),
                     format_size(m.total_bytes),
                     m.connection
@@ -1616,13 +1614,13 @@ impl Worker {
                 if count == 0 {
                     if announce {
                         self.set_status(
-                            "Nie znaleziono nośnika wymiennego. Dyski wewnętrzne i systemowe są pomijane.",
+                            tr!("No removable medium found. Internal and system disks are skipped."),
                             false,
                         );
                     }
                 } else {
                     if announce {
-                        self.set_status(format!("Znaleziono nośników: {count}."), false);
+                        self.set_status(tr!("Media found: {}.", count), false);
                     }
 
                     // Jeden podłączony nośnik to jedyny sensowny cel. Bez tego
@@ -1634,7 +1632,7 @@ impl Worker {
             Err(e) => {
                 self.media.clear();
                 self.push_media_rows();
-                self.set_status(format!("Nie udało się wykryć nośników: {e}"), true);
+                self.set_status(tr!("Could not detect media: {}", e), true);
             }
         }
 
@@ -1694,7 +1692,7 @@ impl Worker {
         };
         let Some(mount) = medium.mount_point.clone() else {
             self.set_status(
-                "Ten nośnik nie jest zamontowany — podłącz go ponownie albo zamontuj.",
+                tr!("This medium is not mounted — plug it in again or mount it."),
                 true,
             );
             return;
@@ -1750,7 +1748,7 @@ impl Worker {
         };
 
         self.with_ui(|ui| ui.set_formatting(true));
-        self.set_status(format!("Formatowanie {} do exFAT…", medium.id), false);
+        self.set_status(tr!("Formatting {} as exFAT…", medium.id), false);
 
         let result = mapstick_media::format_exfat(&medium, "MAPSTICK").await;
 
@@ -1762,10 +1760,10 @@ impl Worker {
         match result {
             Ok(()) => {
                 self.forget_formatted(&medium);
-                self.set_status(format!("{} sformatowany do exFAT.", medium.id), false);
+                self.set_status(tr!("{} formatted as exFAT.", medium.id), false);
                 self.refresh_media().await;
             }
-            Err(e) => self.set_status(format!("Formatowanie nie powiodło się: {e}"), true),
+            Err(e) => self.set_status(tr!("Formatting failed: {}", e), true),
         }
     }
 
@@ -2017,12 +2015,12 @@ impl Worker {
             // trafiał wyłącznie na pasek stanu i znikał razem z oknem.
             let message = match &result {
                 Ok(()) => {
-                    tracing::info!("Pobieranie zakończone");
-                    "Pobieranie zakończone. Sumy kontrolne sprawdzone.".to_owned()
+                    tracing::info!("Download finished");
+                    tr!("Download finished. Checksums verified.")
                 }
                 Err(e) => {
-                    tracing::warn!("Pobieranie nie powiodło się: {e:#}");
-                    format!("Pobieranie nie powiodło się: {e:#}")
+                    tracing::warn!("Download failed: {e:#}");
+                    tr!("Download failed: {}", format!("{e:#}"))
                 }
             };
 
@@ -2090,14 +2088,14 @@ impl Worker {
     /// całość leci na wątku blokującym, a nie w pętli asynchronicznej.
     fn start_copy(&mut self) -> Result<()> {
         let source = self.ready_copy().ok_or_else(|| {
-            anyhow!("Na dysku nie ma gotowego oprogramowania dla tego modelu.")
+            anyhow!(tr!("There is no ready firmware for this model on the disk."))
         })?;
         let target = self
             .copy_destination()
-            .ok_or_else(|| anyhow!("Nie wybrano nośnika."))?;
+            .ok_or_else(|| anyhow!(tr!("No medium chosen.")))?;
         let index = self
             .selected
-            .ok_or_else(|| anyhow!("Nie wybrano modelu."))?;
+            .ok_or_else(|| anyhow!(tr!("No model chosen.")))?;
 
         let model_id = self.entries[index].car.id.clone();
         let version = self
@@ -2116,11 +2114,11 @@ impl Worker {
         if let Ok(space) = mapstick_media::space_for(&target)
             && space.free < mapstick_media::with_margin(total)
         {
-            return Err(anyhow!(
-                "Na nośniku jest {} wolnego, a dane zajmują {}.",
+            return Err(anyhow!(tr!(
+                "The medium has {} free and the data takes {}.",
                 format_size(space.free),
                 format_size(total)
-            ));
+            )));
         }
 
         let cancel = Arc::new(AtomicBool::new(false));
@@ -2211,25 +2209,27 @@ impl Worker {
                     forget = (removed == Some(true)).then_some(model_id);
 
                     match removed {
-                        None => ("Skopiowane na nośnik.".to_owned(), false),
+                        None => (tr!("Copied to the medium."), false),
                         Some(true) => (
-                            "Skopiowane na nośnik, kopia z dysku usunięta.".to_owned(),
+                            tr!("Copied to the medium; the copy on the disk removed."),
                             false,
                         ),
                         Some(false) => (
-                            "Skopiowane na nośnik, ale kopii z dysku nie usunąłem — \
-                             nie potwierdziłem zgodności. Sprawdź nośnik i usuń ją ręcznie."
-                                .to_owned(),
+                            tr!(
+                                "Copied to the medium, but the copy on the disk was not \
+                                 removed — I could not confirm they match. Check the medium \
+                                 and remove it by hand."
+                            ),
                             true,
                         ),
                     }
                 }
                 Ok(Ok(CopyEnd::Cancelled)) => (
-                    "Kopiowanie przerwane. Na nośniku nie ma kompletnych danych.".to_owned(),
+                    tr!("Copying interrupted. The medium does not hold complete data."),
                     true,
                 ),
-                Ok(Err(e)) => (format!("Kopiowanie nie powiodło się: {e}"), true),
-                Err(e) => (format!("Kopiowanie przerwane: {e}"), true),
+                Ok(Err(e)) => (tr!("Copying failed: {}", e), true),
+                Err(e) => (tr!("Copying interrupted: {}", e), true),
             };
 
             let _ = tx.send(Cmd::CopyEnded { forget });
@@ -2253,7 +2253,7 @@ impl Worker {
         // podnosimy flagę i czekamy, aż zauważy ją sama pętla kopiująca.
         if let Some(flag) = self.copy_cancel.take() {
             flag.store(true, Ordering::Relaxed);
-            self.set_status("Przerywam kopiowanie…", false);
+            self.set_status(tr!("Interrupting the copy…"), false);
             return;
         }
 
@@ -2265,8 +2265,7 @@ impl Worker {
             ui.set_downloading(false);
             ui.set_paused(true);
             ui.set_status(
-                "Pobieranie wstrzymane. Kliknij „Wznów”, żeby wrócić do tego miejsca."
-                    .into(),
+                tr!("Download paused. Click “Resume” to carry on from here.").into(),
             );
             ui.set_status_is_error(false);
         });
@@ -2342,10 +2341,7 @@ impl Worker {
         self.push_target_state();
         self.push_leftovers();
         self.set_status(
-            format!(
-                "Pobieranie anulowane — usunięte pozostałości: {}.",
-                format_size(freed)
-            ),
+            tr!("Download cancelled — leftovers removed: {}.", format_size(freed)),
             false,
         );
     }
@@ -2363,7 +2359,7 @@ impl Worker {
         self.store = match Store::load(&self.store_path) {
             Ok(store) => store,
             Err(e) => {
-                self.set_status(format!("Nie udało się wczytać ulubionych: {e}"), true);
+                self.set_status(tr!("Could not load favourites: {}", e), true);
                 Store::default()
             }
         };
@@ -2394,7 +2390,7 @@ impl Worker {
 
         let Some(last) = self.store.last_selection.clone() else {
             self.set_status(
-                "Wybierz markę i region — lista modeli pobierze się sama.",
+                tr!("Pick a brand and a region — the model list loads by itself."),
                 false,
             );
             return;
@@ -2410,7 +2406,7 @@ impl Worker {
         self.pending_select = last.model_id;
 
         if let Err(e) = self.load_models(brand, region).await {
-            self.set_status(format!("Nie udało się pobrać listy: {e}"), true);
+            self.set_status(tr!("Could not fetch the list: {}", e), true);
         }
     }
 
@@ -2486,7 +2482,7 @@ impl Worker {
     /// wersja i ciąg się zmienił — dociągamy katalog i próbujemy raz jeszcze.
     async fn open_link(&mut self, url: String) {
         let Some(brand) = link::brand_of(&url) else {
-            self.set_status("To nie jest odnośnik aktualizacji.", true);
+            self.set_status(tr!("This is not an update link."), true);
             return;
         };
 
@@ -2495,7 +2491,7 @@ impl Worker {
             return;
         }
 
-        self.set_status("Rozpoznaję odnośnik ze strony producenta…", false);
+        self.set_status(tr!("Recognising the link from the maker’s site…"), false);
 
         // Najpierw regiony, których użytkownik używa — auto stoi w jednym.
         let regions: Vec<String> = self
@@ -2525,9 +2521,9 @@ impl Worker {
         }
 
         self.set_status(
-            format!(
-                "Nie rozpoznaję tego odnośnika. Sprawdziłem {} w regionach: {}. \
-                 Jeśli auto jest z innego regionu, wybierz go z listy i kliknij ponownie.",
+            tr!(
+                "I don’t recognise this link. I checked {} in these regions: {}. If the \
+                 car is from another region, pick it from the list and click again.",
                 brand,
                 regions.join(", ")
             ),
@@ -2557,7 +2553,7 @@ impl Worker {
         );
 
         if let Err(e) = self.load_models(brand, region).await {
-            self.set_status(format!("Nie udało się pobrać listy: {e}"), true);
+            self.set_status(tr!("Could not fetch the list: {}", e), true);
         }
 
         self.set_busy(false);
@@ -2583,7 +2579,7 @@ impl Worker {
         self.set_busy(true);
 
         if let Err(e) = self.load_models(brand, region).await {
-            self.set_status(format!("Nie udało się pobrać listy: {e}"), true);
+            self.set_status(tr!("Could not fetch the list: {}", e), true);
         }
 
         self.set_busy(false);
@@ -2594,12 +2590,12 @@ impl Worker {
             match cmd {
                 Cmd::LoadModels { brand, region } => {
                     self.set_busy(true);
-                    self.set_status("Pobieranie listy modeli…", false);
+                    self.set_status(tr!("Fetching the model list…"), false);
 
                     if let Err(e) = self.load_models(brand, region).await {
                         self.entries.clear();
                         self.push_rows();
-                        self.set_status(format!("Nie udało się pobrać listy: {e}"), true);
+                        self.set_status(tr!("Could not fetch the list: {}", e), true);
                     }
 
                     self.set_busy(false);
@@ -2610,8 +2606,8 @@ impl Worker {
                 }
                 Cmd::Select(i) => {
                     if let Err(e) = self.select(i).await {
-                        self.with_ui(|ui| ui.set_detail_size("rozmiar nieznany".into()));
-                        self.set_status(format!("Nie udało się pobrać informacji: {e}"), true);
+                        self.with_ui(|ui| ui.set_detail_size(tr!("size unknown").into()));
+                        self.set_status(tr!("Could not fetch the details: {}", e), true);
                     }
                 }
                 Cmd::UseDirectory(path) => self.use_directory(path),
@@ -2661,13 +2657,13 @@ impl Worker {
                 }
                 Cmd::GoToMedia => {
                     let summary = match (&self.selected, self.required_bytes()) {
-                        (Some(i), needed) if needed > 0 => format!(
-                            "{} — do zapisania {}",
+                        (Some(i), needed) if needed > 0 => tr!(
+                            "{} — {} to write",
                             self.entries[*i].car.name,
                             format_size(needed)
                         ),
-                        (Some(i), _) => format!("{} — rozmiar nieznany", self.entries[*i].car.name),
-                        _ => "Nie wybrano modelu".to_owned(),
+                        (Some(i), _) => tr!("{} — size unknown", self.entries[*i].car.name),
+                        _ => tr!("No model chosen"),
                     };
 
                     self.with_ui(move |ui| {
@@ -2713,9 +2709,18 @@ fn main() -> Result<()> {
         )
         .init();
 
+    // MAPSTICK_LANG wygrywa nad systemem — przydaje się do testów i temu,
+    // kto po prostu woli inny język niż ten, który ma ustawiony pulpit.
+    let preferred = std::env::var("MAPSTICK_LANG").ok();
+    let language = i18n::choose(preferred.as_deref());
+    tracing::info!(
+        "Język interfejsu: {}",
+        language.unwrap_or("en (domyślny)")
+    );
+
     rustls::crypto::ring::default_provider()
         .install_default()
-        .map_err(|_| anyhow!("Nie udało się ustawić dostawcy kryptografii rustls"))?;
+        .map_err(|_| anyhow!(tr!("Could not set up the rustls crypto provider.")))?;
 
     let args: Vec<String> = std::env::args().skip(1).collect();
 
@@ -2743,16 +2748,24 @@ fn main() -> Result<()> {
 
     let ui = AppWindow::new()?;
 
-    let regions: Vec<SharedString> = REGIONS.iter().map(|(_, label)| (*label).into()).collect();
+    // Slint tłumaczy napisy z .slint po tym samym kodzie języka, którego
+    // właśnie ustaliliśmy dla napisów budowanych w Rustcie — inaczej okno
+    // mówiłoby dwoma różnymi językami naraz.
+    slint::select_bundled_translation(language.unwrap_or("")).ok();
+
+    let regions: Vec<SharedString> = REGIONS
+        .iter()
+        .map(|(_, label)| i18n::tr(label).into())
+        .collect();
     ui.set_regions(ModelRc::new(VecModel::from(regions)));
 
     let intervals: Vec<SharedString> = mapstick_store::Interval::ALL
         .iter()
-        .map(|i| i.label().into())
+        .map(|i| i18n::tr(i.label()).into())
         .collect();
     ui.set_intervals(ModelRc::new(VecModel::from(intervals)));
     ui.set_models(ModelRc::new(VecModel::<ModelRow>::default()));
-    ui.set_status("Wybierz markę i region — lista modeli pobierze się sama.".into());
+    ui.set_status(tr!("Pick a brand and a region — the model list loads by itself.").into());
 
     let (tx, rx) = mpsc::unbounded_channel();
 
@@ -2925,7 +2938,7 @@ fn wire_callbacks(ui: &AppWindow, tx: UnboundedSender<Cmd>) {
         // powodu stawiać go nad oknem aplikacji, a schowane za nim wygląda
         // dokładnie tak, jakby przycisk nie działał.
         let dialog = rfd::AsyncFileDialog::new()
-            .set_title("Katalog docelowy")
+            .set_title(tr!("Target folder"))
             .set_parent(&ui.window().window_handle());
 
         // Czekamy w pętli interfejsu, a nie w wątku poleceń: tam czekanie

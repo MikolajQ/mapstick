@@ -101,11 +101,13 @@ pub enum Interval {
 impl Interval {
     pub const ALL: &'static [Interval] = &[Interval::Daily, Interval::Weekly, Interval::Monthly];
 
+    /// Angielski klucz tłumaczenia — patrz `mapstick::i18n`. Ta biblioteka
+    /// nie zależy od Slinta, więc samo tłumaczenie robi wywołujący.
     pub fn label(self) -> &'static str {
         match self {
-            Interval::Daily => "codziennie",
-            Interval::Weekly => "co tydzień",
-            Interval::Monthly => "co miesiąc",
+            Interval::Daily => "daily",
+            Interval::Weekly => "weekly",
+            Interval::Monthly => "monthly",
         }
     }
 }

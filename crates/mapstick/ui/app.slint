@@ -282,7 +282,7 @@ export component AppWindow inherits Window {
 
                 VerticalLayout {
                     spacing: 4px;
-                    Text { text: "Marka"; font-size: 12px; opacity: 0.7; }
+                    Text { text: @tr("Brand"); font-size: 12px; opacity: 0.7; }
                     brand-box := ComboBox {
                         width: 150px;
                         model: root.brands;
@@ -297,7 +297,7 @@ export component AppWindow inherits Window {
 
                 VerticalLayout {
                     spacing: 4px;
-                    Text { text: "Region"; font-size: 12px; opacity: 0.7; }
+                    Text { text: @tr("Region"); font-size: 12px; opacity: 0.7; }
                     region-box := ComboBox {
                         width: 210px;
                         model: root.regions;
@@ -316,7 +316,7 @@ export component AppWindow inherits Window {
                     Text {
                         height: 32px;
                         vertical-alignment: center;
-                        text: root.busy ? "Wczytywanie…" : "";
+                        text: root.busy ? @tr("Loading…") : "";
                         font-size: 12px;
                         opacity: 0.7;
                     }
@@ -368,14 +368,14 @@ export component AppWindow inherits Window {
                 padding: 0px;
 
                 LineEdit {
-                    placeholder-text: "Filtruj: nazwa, ID modelu albo wersja…";
+                    placeholder-text: @tr("Filter: name, model ID or version…");
                     enabled: root.total-count > 0;
                     edited(text) => { root.filter-changed(text); }
                 }
 
                 Text {
                     vertical-alignment: center;
-                    text: root.total-count > 0 ? root.models.length + " z " + root.total-count : "";
+                    text: root.total-count > 0 ? @tr("{} of {}", root.models.length, root.total-count) : "";
                     font-size: 12px;
                     opacity: 0.7;
                 }
@@ -398,10 +398,10 @@ export component AppWindow inherits Window {
                             padding-left: 10px;
                             padding-right: 10px;
                             spacing: 10px;
-                            Text { width: 30%; text: "NAZWA"; font-size: 11px; font-weight: 700; vertical-alignment: center; opacity: 0.75; }
-                            Text { width: 24%; text: "ID MODELU"; font-size: 11px; font-weight: 700; vertical-alignment: center; opacity: 0.75; }
-                            Text { text: "WERSJA"; font-size: 11px; font-weight: 700; vertical-alignment: center; opacity: 0.75; }
-                            Text { width: 70px; text: "NOŚNIK"; font-size: 11px; font-weight: 700; vertical-alignment: center; opacity: 0.75; }
+                            Text { width: 30%; text: @tr("NAME"); font-size: 11px; font-weight: 700; vertical-alignment: center; opacity: 0.75; }
+                            Text { width: 24%; text: @tr("MODEL ID"); font-size: 11px; font-weight: 700; vertical-alignment: center; opacity: 0.75; }
+                            Text { text: @tr("VERSION"); font-size: 11px; font-weight: 700; vertical-alignment: center; opacity: 0.75; }
+                            Text { width: 70px; text: @tr("MEDIA"); font-size: 11px; font-weight: 700; vertical-alignment: center; opacity: 0.75; }
                         }
                     }
 
@@ -445,7 +445,7 @@ export component AppWindow inherits Window {
                     spacing: 8px;
 
                     if !root.detail-ready: Text {
-                        text: "Wybierz model z listy, żeby zobaczyć rozmiar i przygotować nośnik.";
+                        text: @tr("Pick a model from the list to see its size and prepare a medium.");
                         vertical-alignment: center;
                         horizontal-alignment: center;
                         opacity: 0.6;
@@ -469,8 +469,8 @@ export component AppWindow inherits Window {
                                 width: 30px;
                                 accessible-role: button;
                                 accessible-label: root.selected-is-favourite
-                                    ? "Usuń z ulubionych"
-                                    : "Dodaj do ulubionych";
+                                    ? @tr("Remove from favourites")
+                                    : @tr("Add to favourites");
 
                                 star-touch := TouchArea {
                                     mouse-cursor: pointer;
@@ -500,8 +500,8 @@ export component AppWindow inherits Window {
                         }
 
                         Text {
-                            text: root.detail-version + "   ·   nośnik " + root.detail-media
-                                + (root.detail-released == "" ? "" : "   ·   ostatnie dostępne wydanie " + root.detail-released);
+                            text: @tr("{}   ·   media {}", root.detail-version, root.detail-media)
+                                + (root.detail-released == "" ? "" : @tr("   ·   latest release {}", root.detail-released));
                             font-size: 12px;
                             opacity: 0.8;
                             overflow: elide;
@@ -513,13 +513,13 @@ export component AppWindow inherits Window {
                             spacing: 8px;
 
                             CheckBox {
-                                text: "pilnuj aktualizacji";
+                                text: @tr("watch for updates");
                                 checked: root.selected-watch;
                                 toggled => { root.set-watch(self.checked); }
                             }
 
                             Text {
-                                text: "co:";
+                                text: @tr("every:");
                                 vertical-alignment: center;
                                 font-size: 12px;
                                 opacity: 0.7;
@@ -533,7 +533,7 @@ export component AppWindow inherits Window {
                             }
 
                             Text {
-                                text: "w aucie:";
+                                text: @tr("in the car:");
                                 vertical-alignment: center;
                                 font-size: 12px;
                                 opacity: 0.7;
@@ -575,7 +575,7 @@ export component AppWindow inherits Window {
                                 font-size: 13px;
                             }
                             Button {
-                                text: "Pobierz i przygotuj nośnik →";
+                                text: @tr("Download and prepare a medium →");
                                 primary: true;
                                 clicked => { root.go-to-media(); }
                             }
@@ -593,7 +593,7 @@ export component AppWindow inherits Window {
                 padding: 0px;
                 spacing: 12px;
                 Button {
-                    text: "← Wróć do listy";
+                    text: @tr("← Back to the list");
                     enabled: !root.downloading && !root.formatting;
                     clicked => { root.go-back(); }
                 }
@@ -605,7 +605,7 @@ export component AppWindow inherits Window {
                     overflow: elide;
                 }
                 Button {
-                    text: root.media-busy ? "Szukam…" : "Odśwież";
+                    text: root.media-busy ? @tr("Looking…") : @tr("Refresh");
                     enabled: !root.media-busy && !root.formatting;
                     clicked => { root.refresh-media(); }
                 }
@@ -624,12 +624,12 @@ export component AppWindow inherits Window {
                     alignment: center;
                     Text {
                         horizontal-alignment: center;
-                        text: root.media-busy ? "Szukam nośników…" : "Nie znaleziono nośnika wymiennego.";
+                        text: root.media-busy ? @tr("Looking for media…") : @tr("No removable medium found.");
                         opacity: 0.7;
                     }
                     Text {
                         horizontal-alignment: center;
-                        text: "Podłącz pendrive i naciśnij „Odśwież”. Dyski wewnętrzne oraz te,\nna których leży system, są celowo pomijane.";
+                        text: @tr("Plug in a USB stick and press “Refresh”. Internal disks and disks\nholding an operating system are skipped on purpose.");
                         font-size: 12px;
                         opacity: 0.55;
                     }
@@ -661,7 +661,7 @@ export component AppWindow inherits Window {
                                     overflow: elide;
                                 }
                                 if m.installed_model != "": Text {
-                                    text: "znaleziono: " + m.installed_model;
+                                    text: @tr("found: {}", m.installed_model);
                                     font-size: 11px;
                                     font-family: "monospace";
                                     opacity: 0.6;
@@ -689,13 +689,13 @@ export component AppWindow inherits Window {
                                     color: m.usable ? #4a9d5f : #c07830;
                                 }
                                 if m.stale != "": Button {
-                                    text: "Usuń stare mapy (" + m.stale + ")";
+                                    text: @tr("Remove old maps ({})", m.stale);
                                     enabled: !root.downloading && !root.copying
                                         && !root.formatting;
                                     clicked => { root.remove-stale(i); }
                                 }
                                 DangerButton {
-                                    caption: "Formatuj do exFAT";
+                                    caption: @tr("Format as exFAT");
                                     enabled: !root.downloading && !root.copying
                                         && !root.formatting;
                                     clicked => { root.request-format(i); }
@@ -728,7 +728,7 @@ export component AppWindow inherits Window {
                         if root.paused && !root.downloading && !root.copying: Button {
                             width: 190px;
                             height: 42px;
-                            text: "Wznów";
+                            text: @tr("Resume");
                             primary: true;
                             enabled: root.output-dir != "" && !root.formatting;
                             clicked => { root.start-download(); }
@@ -736,7 +736,7 @@ export component AppWindow inherits Window {
                         if root.paused && !root.downloading && !root.copying: Button {
                             width: 150px;
                             height: 42px;
-                            text: "Anuluj i posprzątaj";
+                            text: @tr("Cancel and clean up");
                             clicked => { root.abandon-download(); }
                         }
 
@@ -744,7 +744,7 @@ export component AppWindow inherits Window {
                                 && root.copy-source != "" && root.copy-target != "": Button {
                             width: 190px;
                             height: 42px;
-                            text: "Skopiuj na nośnik";
+                            text: @tr("Copy to the medium");
                             primary: true;
                             enabled: !root.formatting;
                             clicked => { root.start-copy(); }
@@ -756,7 +756,7 @@ export component AppWindow inherits Window {
                                 && !root.target-has-current: Button {
                             width: 190px;
                             height: 42px;
-                            text: "Pobierz";
+                            text: @tr("Download");
                             primary: root.copy-source == "" || root.copy-target == "";
                             enabled: root.output-dir != "" && !root.formatting;
                             clicked => { root.start-download(); }
@@ -769,7 +769,7 @@ export component AppWindow inherits Window {
                                 && root.target-has-current: Button {
                             width: 190px;
                             height: 42px;
-                            text: "Pobierz ponownie";
+                            text: @tr("Download again");
                             enabled: root.output-dir != "" && !root.formatting;
                             clicked => { root.request-redownload(); }
                         }
@@ -780,33 +780,33 @@ export component AppWindow inherits Window {
                         if root.downloading: Button {
                             width: 190px;
                             height: 42px;
-                            text: "Wstrzymaj";
+                            text: @tr("Pause");
                             clicked => { root.cancel-download(); }
                         }
                         if root.downloading: Button {
                             width: 150px;
                             height: 42px;
-                            text: "Anuluj i posprzątaj";
+                            text: @tr("Cancel and clean up");
                             clicked => { root.abandon-download(); }
                         }
                         if root.copying: Button {
                             width: 190px;
                             height: 42px;
-                            text: "Anuluj";
+                            text: @tr("Cancel");
                             clicked => { root.cancel-download(); }
                         }
 
                         WrapCheckBox {
                             horizontal-stretch: 1;
                             min-width: 220px;
-                            caption: "Pobieraj pliki bezpośrednio na nośnik przenośny z pominięciem dysku twardego";
+                            caption: @tr("Download straight to the removable medium, bypassing the hard disk");
                             checked: root.direct-to-medium;
                             enabled: !root.downloading;
                             toggled(on) => { root.set-direct-mode(on); }
                         }
 
                         Button {
-                            text: "Inny katalog…";
+                            text: @tr("Other folder…");
                             enabled: !root.downloading;
                             clicked => { root.pick-output-dir(); }
                         }
@@ -830,7 +830,7 @@ export component AppWindow inherits Window {
 
                     Text {
                         text: root.output-dir == ""
-                            ? "Wybierz nośnik z listy powyżej albo wskaż inny katalog."
+                            ? @tr("Pick a medium from the list above or choose another folder.")
                             : root.output-dir;
                         font-size: 12px;
                         opacity: root.output-dir == "" ? 0.6 : 0.85;
@@ -846,7 +846,7 @@ export component AppWindow inherits Window {
 
                             ready := Text {
                                 width: parent.width;
-                                text: "To oprogramowanie leży już na dysku twardym — nie trzeba go pobierać drugi raz.";
+                                text: @tr("This firmware is already on the hard disk — no need to download it twice.");
                                 font-size: 12px;
                                 color: #4a9d5f;
                                 wrap: word-wrap;
@@ -867,7 +867,7 @@ export component AppWindow inherits Window {
                             overflow: elide;
                         }
                         CheckBox {
-                            text: "usuń z dysku po skopiowaniu";
+                            text: @tr("delete from the disk after copying");
                             checked: root.delete-after-copy;
                             toggled => { root.set-delete-after-copy(self.checked); }
                         }
@@ -878,7 +878,7 @@ export component AppWindow inherits Window {
 
                         current := Text {
                             width: parent.width;
-                            text: "We wskazanym miejscu leży już bieżąca wersja.";
+                            text: @tr("The current version is already in the chosen place.");
                             font-size: 12px;
                             color: #4a9d5f;
                             wrap: word-wrap;
@@ -890,12 +890,12 @@ export component AppWindow inherits Window {
                         Text {
                             vertical-alignment: center;
                             horizontal-stretch: 1;
-                            text: "Pozostałości archiwów na dysku: " + root.leftovers;
+                            text: @tr("Leftover archives on the disk: {}", root.leftovers);
                             font-size: 12px;
                             opacity: 0.75;
                         }
                         Button {
-                            text: "Wyczyść";
+                            text: @tr("Clear");
                             clicked => { root.clear-cache(); }
                         }
                     }
@@ -936,7 +936,7 @@ export component AppWindow inherits Window {
                 spacing: 12px;
 
                 Text {
-                    text: "Pobrać to samo jeszcze raz?";
+                    text: @tr("Download the same thing again?");
                     font-size: 19px;
                     font-weight: 700;
                     color: #f0f0f0;
@@ -951,7 +951,7 @@ export component AppWindow inherits Window {
                 }
 
                 Text {
-                    text: "Pobieranie pomija pliki, które już są, więc najpierw trzeba je usunąć. Skasujemy wyłącznie to, co wymienia plik .ver tego modelu — niczego innego z tego miejsca nie ruszamy.";
+                    text: @tr("Downloading skips files that are already there, so they have to be removed first. Only what this model’s .ver file lists will be deleted — nothing else in that place is touched.");
                     font-size: 13px;
                     color: #c8c8c8;
                     wrap: word-wrap;
@@ -962,11 +962,11 @@ export component AppWindow inherits Window {
                     spacing: 10px;
                     alignment: end;
                     Button {
-                        text: "Anuluj";
+                        text: @tr("Cancel");
                         clicked => { root.cancel-redownload(); }
                     }
                     Button {
-                        text: "Usuń i pobierz";
+                        text: @tr("Delete and download");
                         clicked => { root.confirm-redownload(); }
                     }
                 }
@@ -993,7 +993,7 @@ export component AppWindow inherits Window {
                 spacing: 12px;
 
                 Text {
-                    text: "Skasować wszystko na tym nośniku?";
+                    text: @tr("Erase everything on this medium?");
                     font-size: 19px;
                     font-weight: 700;
                     color: #f0f0f0;
@@ -1008,7 +1008,7 @@ export component AppWindow inherits Window {
                 }
 
                 Text {
-                    text: "Formatowanie do exFAT usuwa wszystkie dane z tego nośnika bezpowrotnie. Upewnij się, że wskazany napęd to ten, o którym myślisz.";
+                    text: @tr("Formatting as exFAT removes all data from this medium for good. Make sure the drive shown is the one you have in mind.");
                     font-size: 13px;
                     color: #c8c8c8;
                     wrap: word-wrap;
@@ -1019,11 +1019,11 @@ export component AppWindow inherits Window {
                     spacing: 10px;
                     alignment: end;
                     Button {
-                        text: "Anuluj";
+                        text: @tr("Cancel");
                         clicked => { root.cancel-format(); }
                     }
                     Button {
-                        text: root.formatting ? "Formatuję…" : "Formatuj";
+                        text: root.formatting ? @tr("Formatting…") : @tr("Format");
                         enabled: !root.formatting;
                         clicked => { root.confirm-format(); }
                     }

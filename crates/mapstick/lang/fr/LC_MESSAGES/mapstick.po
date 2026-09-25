@@ -1,0 +1,473 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: mapstick\n"
+"POT-Creation-Date: 2026-09-25 12:00+0000\n"
+"PO-Revision-Date: 2026-09-25 12:00+0000\n"
+"Last-Translator: MikolajQ\n"
+"Language-Team: French\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "Brand"
+msgstr "Marque"
+
+msgid "Region"
+msgstr "Région"
+
+msgid "Loading…"
+msgstr "Chargement…"
+
+msgid "Filter: name, model ID or version…"
+msgstr "Filtrer : nom, identifiant du modèle ou version…"
+
+msgid "{} of {}"
+msgstr "{} sur {}"
+
+msgid "NAME"
+msgstr "NOM"
+
+msgid "MODEL ID"
+msgstr "ID MODÈLE"
+
+msgid "VERSION"
+msgstr "VERSION"
+
+msgid "MEDIA"
+msgstr "SUPPORT"
+
+msgid "Pick a model from the list to see its size and prepare a medium."
+msgstr "Choisissez un modèle dans la liste pour voir sa taille et préparer un support."
+
+msgid "Remove from favourites"
+msgstr "Retirer des favoris"
+
+msgid "Add to favourites"
+msgstr "Ajouter aux favoris"
+
+msgid "{}   ·   media {}"
+msgstr "{}   ·   support {}"
+
+msgid "   ·   latest release {}"
+msgstr "   ·   dernière version {}"
+
+msgid "watch for updates"
+msgstr "surveiller les mises à jour"
+
+msgid "every:"
+msgstr "tous les :"
+
+msgid "in the car:"
+msgstr "dans la voiture :"
+
+msgid "Download and prepare a medium →"
+msgstr "Télécharger et préparer un support →"
+
+msgid "← Back to the list"
+msgstr "← Retour à la liste"
+
+msgid "Looking…"
+msgstr "Recherche…"
+
+msgid "Refresh"
+msgstr "Actualiser"
+
+msgid "Looking for media…"
+msgstr "Recherche de supports…"
+
+msgid "No removable medium found."
+msgstr "Aucun support amovible trouvé."
+
+msgid ""
+"Plug in a USB stick and press “Refresh”. Internal disks and disks\n"
+"holding an operating system are skipped on purpose."
+msgstr ""
+"Branchez une clé USB et cliquez sur « Actualiser ». Les disques internes et ceux\n"
+"contenant un système d’exploitation sont volontairement ignorés."
+
+msgid "found: {}"
+msgstr "trouvé : {}"
+
+msgid "Remove old maps ({})"
+msgstr "Supprimer les anciennes cartes ({})"
+
+msgid "Format as exFAT"
+msgstr "Formater en exFAT"
+
+msgid "Resume"
+msgstr "Reprendre"
+
+msgid "Cancel and clean up"
+msgstr "Annuler et nettoyer"
+
+msgid "Copy to the medium"
+msgstr "Copier sur le support"
+
+msgid "Download"
+msgstr "Télécharger"
+
+msgid "Download again"
+msgstr "Télécharger à nouveau"
+
+msgid "Pause"
+msgstr "Mettre en pause"
+
+msgid "Cancel"
+msgstr "Annuler"
+
+msgid "Download straight to the removable medium, bypassing the hard disk"
+msgstr "Télécharger directement sur le support amovible, sans passer par le disque dur"
+
+msgid "Other folder…"
+msgstr "Autre dossier…"
+
+msgid "Pick a medium from the list above or choose another folder."
+msgstr "Choisissez un support dans la liste ci-dessus ou un autre dossier."
+
+msgid "This firmware is already on the hard disk — no need to download it twice."
+msgstr "Ce micrologiciel est déjà sur le disque dur — inutile de le télécharger deux fois."
+
+msgid "delete from the disk after copying"
+msgstr "supprimer du disque après la copie"
+
+msgid "The current version is already in the chosen place."
+msgstr "La version actuelle se trouve déjà à l’endroit choisi."
+
+msgid "Leftover archives on the disk: {}"
+msgstr "Archives restantes sur le disque : {}"
+
+msgid "Clear"
+msgstr "Effacer"
+
+msgid "Download the same thing again?"
+msgstr "Télécharger de nouveau la même chose ?"
+
+msgid "Downloading skips files that are already there, so they have to be removed first. Only what this model’s .ver file lists will be deleted — nothing else in that place is touched."
+msgstr "Le téléchargement ignore les fichiers déjà présents, il faut donc d’abord les supprimer. Seul ce que liste le fichier .ver de ce modèle sera effacé — rien d’autre à cet endroit ne sera touché."
+
+msgid "Delete and download"
+msgstr "Supprimer et télécharger"
+
+msgid "Erase everything on this medium?"
+msgstr "Effacer tout le contenu de ce support ?"
+
+msgid "Formatting as exFAT removes all data from this medium for good. Make sure the drive shown is the one you have in mind."
+msgstr "Le formatage en exFAT supprime définitivement toutes les données de ce support. Vérifiez que le lecteur affiché est bien celui que vous visez."
+
+msgid "Formatting…"
+msgstr "Formatage…"
+
+msgid "Format"
+msgstr "Formater"
+
+msgid "Europe"
+msgstr "Europe"
+
+msgid "Brazil"
+msgstr "Brésil"
+
+msgid "Canada"
+msgstr "Canada"
+
+msgid "Indonesia"
+msgstr "Indonésie"
+
+msgid "India"
+msgstr "Inde"
+
+msgid "Japan"
+msgstr "Japon"
+
+msgid "South Korea"
+msgstr "Corée du Sud"
+
+msgid "Middle East"
+msgstr "Moyen-Orient"
+
+msgid "New Zealand"
+msgstr "Nouvelle-Zélande"
+
+msgid "Russia and CIS"
+msgstr "Russie et CEI"
+
+msgid "Singapore"
+msgstr "Singapour"
+
+msgid "Türkiye"
+msgstr "Turquie"
+
+msgid "United States"
+msgstr "États-Unis"
+
+msgid "This model is published for several head-unit variants (e.g. ccNC and ccNC Lite). The files to download are identical for all of them — pick the number you see on the car’s screen."
+msgstr "Ce modèle est publié pour plusieurs variantes d’autoradio (par ex. ccNC et ccNC Lite). Les fichiers à télécharger sont identiques pour toutes — choisissez le numéro affiché à l’écran de la voiture."
+
+msgid "{} - {}"
+msgstr "{} - {}"
+
+msgid "don’t know"
+msgstr "je ne sais pas"
+
+msgid "  ·  written in the .ver file"
+msgstr "  ·  inscrit dans le fichier .ver"
+
+msgid "  ·  we downloaded this"
+msgstr "  ·  nous avons téléchargé ceci"
+
+msgid "1 model"
+msgstr "1 modèle"
+
+msgid "{} models"
+msgstr "{} modèles"
+
+msgid "Asking the maker {} (watched: {}); a new release is brought up daily — woken by {}."
+msgstr "J’interroge le constructeur {} (surveillés : {}) ; une nouvelle version est rappelée chaque jour — réveillé par {}."
+
+msgid "No way to check in the background — the schedule was not set up."
+msgstr "Impossible de vérifier en arrière-plan — la planification n’a pas été mise en place."
+
+msgid "Watching {} — I will let you know when a new release appears."
+msgstr "Surveillance de {} — je vous préviendrai dès qu’une nouvelle version paraît."
+
+msgid "No longer watching {}."
+msgstr "{} n’est plus surveillé."
+
+msgid "Asking the maker {}."
+msgstr "J’interroge le constructeur {}."
+
+msgid "{} Woken by {}."
+msgstr "{} Réveillé par {}."
+
+msgid "{} The schedule could not be set up, though: {}"
+msgstr "{} La planification n’a toutefois pas pu être mise en place : {}"
+
+msgid "{}: the car has {}."
+msgstr "{} : la voiture a {}."
+
+msgid "{}: unknown what the car has."
+msgstr "{} : version de la voiture inconnue."
+
+msgid "{} removed from favourites."
+msgstr "{} retiré des favoris."
+
+msgid "{} added to favourites."
+msgstr "{} ajouté aux favoris."
+
+msgid "checking the size…"
+msgstr "vérification de la taille…"
+
+msgid "{} to download · files: {}"
+msgstr "{} à télécharger · fichiers : {}"
+
+msgid "{} · files: {}"
+msgstr "{} · fichiers : {}"
+
+msgid "{} to download, {} on the medium · files: {}"
+msgstr "{} à télécharger, {} sur le support · fichiers : {}"
+
+msgid "There are no files of a previous release there."
+msgstr "Il n’y a là aucun fichier d’une version précédente."
+
+msgid "Removed {} files of the previous release — {} recovered."
+msgstr "{} fichiers de la version précédente supprimés — {} récupérés."
+
+msgid ""
+"{}\n"
+"To be removed: {} files, {}"
+msgstr ""
+"{}\n"
+"À supprimer : {} fichiers, {}"
+
+msgid "Leftover archives removed."
+msgstr "Archives restantes supprimées."
+
+msgid "Nothing to remove."
+msgstr "Rien à supprimer."
+
+msgid "Could not clean up: {}"
+msgstr "Impossible de nettoyer : {}"
+
+msgid "not mounted"
+msgstr "non monté"
+
+msgid "needs exFAT"
+msgstr "exFAT requis"
+
+msgid "the medium already holds the current version"
+msgstr "le support contient déjà la version actuelle"
+
+msgid "not enough space"
+msgstr "espace insuffisant"
+
+msgid "The removable medium holds a different firmware version; it will be removed once the current one is downloaded"
+msgstr "Le support amovible contient une autre version du micrologiciel ; elle sera supprimée dès que la version actuelle sera téléchargée"
+
+msgid "ready"
+msgstr "prêt"
+
+msgid "{} · free {} of {}{}"
+msgstr "{} · libre {} sur {}{}"
+
+msgid "no file system"
+msgstr "aucun système de fichiers"
+
+msgid "No removable medium found. Internal and system disks are skipped."
+msgstr "Aucun support amovible trouvé. Les disques internes et système sont ignorés."
+
+msgid "Media found: {}."
+msgstr "Supports trouvés : {}."
+
+msgid "Could not detect media: {}"
+msgstr "Impossible de détecter les supports : {}"
+
+msgid "This medium is not mounted — plug it in again or mount it."
+msgstr "Ce support n’est pas monté — rebranchez-le ou montez-le."
+
+msgid "Formatting {} as exFAT…"
+msgstr "Formatage de {} en exFAT…"
+
+msgid "{} formatted as exFAT."
+msgstr "{} formaté en exFAT."
+
+msgid "Formatting failed: {}"
+msgstr "Échec du formatage : {}"
+
+msgid "Download finished. Checksums verified."
+msgstr "Téléchargement terminé. Sommes de contrôle vérifiées."
+
+msgid "Download failed: {}"
+msgstr "Échec du téléchargement : {}"
+
+msgid "There is no ready firmware for this model on the disk."
+msgstr "Il n’y a pas de micrologiciel prêt pour ce modèle sur le disque."
+
+msgid "No medium chosen."
+msgstr "Aucun support choisi."
+
+msgid "No model chosen."
+msgstr "Aucun modèle choisi."
+
+msgid "The medium has {} free and the data takes {}."
+msgstr "Le support dispose de {} libres et les données occupent {}."
+
+msgid "Copied to the medium."
+msgstr "Copié sur le support."
+
+msgid "Copied to the medium; the copy on the disk removed."
+msgstr "Copié sur le support ; la copie sur le disque a été supprimée."
+
+msgid "Copied to the medium, but the copy on the disk was not removed — I could not confirm they match. Check the medium and remove it by hand."
+msgstr "Copié sur le support, mais la copie sur le disque n’a pas été supprimée — je n’ai pas pu confirmer qu’elles correspondent. Vérifiez le support et supprimez-la manuellement."
+
+msgid "Copying interrupted. The medium does not hold complete data."
+msgstr "Copie interrompue. Le support ne contient pas de données complètes."
+
+msgid "Copying failed: {}"
+msgstr "Échec de la copie : {}"
+
+msgid "Copying interrupted: {}"
+msgstr "Copie interrompue : {}"
+
+msgid "Interrupting the copy…"
+msgstr "Interruption de la copie…"
+
+msgid "Download paused. Click “Resume” to carry on from here."
+msgstr "Téléchargement en pause. Cliquez sur « Reprendre » pour continuer d’ici."
+
+msgid "Download cancelled — leftovers removed: {}."
+msgstr "Téléchargement annulé — restes supprimés : {}."
+
+msgid "Could not load favourites: {}"
+msgstr "Impossible de charger les favoris : {}"
+
+msgid "Pick a brand and a region — the model list loads by itself."
+msgstr "Choisissez une marque et une région — la liste des modèles se charge d’elle-même."
+
+msgid "Could not fetch the list: {}"
+msgstr "Impossible de récupérer la liste : {}"
+
+msgid "Could not fetch the details: {}"
+msgstr "Impossible de récupérer les détails : {}"
+
+msgid "Fetching the model list…"
+msgstr "Récupération de la liste des modèles…"
+
+msgid "size unknown"
+msgstr "taille inconnue"
+
+msgid "This is not an update link."
+msgstr "Ce n’est pas un lien de mise à jour."
+
+msgid "Recognising the link from the maker’s site…"
+msgstr "Reconnaissance du lien depuis le site du constructeur…"
+
+msgid "I don’t recognise this link. I checked {} in these regions: {}. If the car is from another region, pick it from the list and click again."
+msgstr "Je ne reconnais pas ce lien. J’ai vérifié {} dans ces régions : {}. Si la voiture vient d’une autre région, choisissez-la dans la liste et cliquez à nouveau."
+
+msgid "{} — {} to write"
+msgstr "{} — {} à écrire"
+
+msgid "{} — size unknown"
+msgstr "{} — taille inconnue"
+
+msgid "No model chosen"
+msgstr "Aucun modèle choisi"
+
+msgid "Target folder"
+msgstr "Dossier cible"
+
+msgid "Downloaded files need unpacking, so the removable medium has to hold the archives and the unpacked result at once: about {}. Writes to the flash memory double as a result. Use this only if you have a large medium and not enough free space on the hard disk."
+msgstr "Les fichiers téléchargés doivent être extraits, donc le support amovible doit contenir à la fois les archives et le résultat extrait : environ {}. Les écritures sur la mémoire flash sont donc doublées. À utiliser seulement si vous avez un grand support et pas assez d’espace libre sur le disque dur."
+
+msgid "The downloaded archives ({}) go to the hard disk for the time being; only the unpacked result ({}) lands on the removable medium."
+msgstr "Les archives téléchargées ({}) vont provisoirement sur le disque dur ; seul le résultat extrait ({}) atterrit sur le support amovible."
+
+msgid "The downloaded archives will be unpacked into the chosen folder ({} needed). Once the download finishes, plug in the removable device and click “Refresh” to copy or move the data onto it."
+msgstr "Les archives téléchargées seront extraites dans le dossier choisi ({} nécessaires). Une fois le téléchargement terminé, branchez le périphérique amovible et cliquez sur « Actualiser » pour copier ou déplacer les données dessus."
+
+msgid "a systemd timer"
+msgstr "un minuteur systemd"
+
+msgid "a cron entry"
+msgstr "une entrée cron"
+
+msgid "startup at login"
+msgstr "démarrage à la connexion"
+
+msgid "daily"
+msgstr "chaque jour"
+
+msgid "weekly"
+msgstr "chaque semaine"
+
+msgid "monthly"
+msgstr "chaque mois"
+
+msgid "Could not set up the rustls crypto provider."
+msgstr "Impossible de configurer le fournisseur de chiffrement rustls."
+
+msgid "{}: new map release"
+msgstr "{} : nouvelle version des cartes"
+
+msgid ""
+"{}{}\n"
+"The car has {}. I will remind you tomorrow, unless you copy the new files onto the medium or mark the car as having it."
+msgstr ""
+"{}{}\n"
+"La voiture a {}. Je vous le rappellerai demain, sauf si vous copiez les nouveaux fichiers sur le support ou indiquez que la voiture les possède déjà."
+
+msgid ""
+"{}{}\n"
+"I don’t know what version is in the car — mark it, so I can tell whether this is an update. Until then, I will remind you every day."
+msgstr ""
+"{}{}\n"
+"Je ne sais pas quelle version se trouve dans la voiture — indiquez-la, pour que je puisse dire s’il s’agit d’une mise à jour. D’ici là, je vous le rappellerai chaque jour."
+
+msgid "Show"
+msgstr "Afficher"
+
+msgid "The car already has it"
+msgstr "La voiture l’a déjà"

@@ -1,0 +1,611 @@
+#
+msgid ""
+msgstr "Project-Id-Version: mapstick\nPOT-Creation-Date: 2026-09-21 08:59+0000\nPO-Revision-Date: 2026-09-21 12:00+0200\nLast-Translator: MikolajQ\nLanguage-Team: Polish\nLanguage: pl\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\nPlural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: ui/app.slint:285
+msgid "Brand"
+msgstr "Marka"
+
+#: ui/app.slint:300
+msgid "Region"
+msgstr "Region"
+
+#: ui/app.slint:319
+msgid "Loading…"
+msgstr "Wczytywanie…"
+
+#: ui/app.slint:371
+msgid "Filter: name, model ID or version…"
+msgstr "Filtruj: nazwa, ID modelu albo wersja…"
+
+#: ui/app.slint:378
+msgid "{} of {}"
+msgstr "{} z {}"
+
+#: ui/app.slint:401
+msgid "NAME"
+msgstr "NAZWA"
+
+#: ui/app.slint:402
+msgid "MODEL ID"
+msgstr "ID MODELU"
+
+#: ui/app.slint:403
+msgid "VERSION"
+msgstr "WERSJA"
+
+#: ui/app.slint:404
+msgid "MEDIA"
+msgstr "NOŚNIK"
+
+#: ui/app.slint:448
+msgid "Pick a model from the list to see its size and prepare a medium."
+msgstr "Wybierz model z listy, żeby zobaczyć rozmiar i przygotować nośnik."
+
+#: ui/app.slint:472
+msgid "Remove from favourites"
+msgstr "Usuń z ulubionych"
+
+#: ui/app.slint:473
+msgid "Add to favourites"
+msgstr "Dodaj do ulubionych"
+
+#: ui/app.slint:503
+msgid "{}   ·   media {}"
+msgstr "{}   ·   nośnik {}"
+
+#: ui/app.slint:504
+msgid "   ·   latest release {}"
+msgstr "   ·   ostatnie dostępne wydanie {}"
+
+#: ui/app.slint:516
+msgid "watch for updates"
+msgstr "pilnuj aktualizacji"
+
+#: ui/app.slint:522
+msgid "every:"
+msgstr "co:"
+
+#: ui/app.slint:536
+msgid "in the car:"
+msgstr "w aucie:"
+
+#: ui/app.slint:578
+msgid "Download and prepare a medium →"
+msgstr "Pobierz i przygotuj nośnik →"
+
+#: ui/app.slint:596
+msgid "← Back to the list"
+msgstr "← Wróć do listy"
+
+#: ui/app.slint:608
+msgid "Looking…"
+msgstr "Szukam…"
+
+#: ui/app.slint:608
+msgid "Refresh"
+msgstr "Odśwież"
+
+#: ui/app.slint:627
+msgid "Looking for media…"
+msgstr "Szukam nośników…"
+
+#: ui/app.slint:627
+msgid "No removable medium found."
+msgstr "Nie znaleziono nośnika wymiennego."
+
+#: ui/app.slint:632
+msgid ""
+"Plug in a USB stick and press “Refresh”. Internal disks and disks\n"
+"holding an operating system are skipped on purpose."
+msgstr ""
+"Podłącz pendrive i naciśnij „Odśwież”. Dyski wewnętrzne oraz te,\n"
+"na których leży system, są celowo pomijane."
+
+#: ui/app.slint:664
+msgid "found: {}"
+msgstr "znaleziono: {}"
+
+#: ui/app.slint:692
+msgid "Remove old maps ({})"
+msgstr "Usuń stare mapy ({})"
+
+#: ui/app.slint:698
+msgid "Format as exFAT"
+msgstr "Formatuj do exFAT"
+
+#: ui/app.slint:731
+msgid "Resume"
+msgstr "Wznów"
+
+#: ui/app.slint:739 ui/app.slint:789
+msgid "Cancel and clean up"
+msgstr "Anuluj i posprzątaj"
+
+#: ui/app.slint:747
+msgid "Copy to the medium"
+msgstr "Skopiuj na nośnik"
+
+#: ui/app.slint:759
+msgid "Download"
+msgstr "Pobierz"
+
+#: ui/app.slint:772
+msgid "Download again"
+msgstr "Pobierz ponownie"
+
+#: ui/app.slint:783
+msgid "Pause"
+msgstr "Wstrzymaj"
+
+#: ui/app.slint:795 ui/app.slint:965 ui/app.slint:1022
+msgid "Cancel"
+msgstr "Anuluj"
+
+#: ui/app.slint:802
+msgid "Download straight to the removable medium, bypassing the hard disk"
+msgstr "Pobieraj pliki bezpośrednio na nośnik przenośny z pominięciem dysku twardego"
+
+#: ui/app.slint:809
+msgid "Other folder…"
+msgstr "Inny katalog…"
+
+#: ui/app.slint:833
+msgid "Pick a medium from the list above or choose another folder."
+msgstr "Wybierz nośnik z listy powyżej albo wskaż inny katalog."
+
+#: ui/app.slint:849
+msgid "This firmware is already on the hard disk — no need to download it twice."
+msgstr "To oprogramowanie leży już na dysku twardym — nie trzeba go pobierać drugi raz."
+
+#: ui/app.slint:870
+msgid "delete from the disk after copying"
+msgstr "usuń z dysku po skopiowaniu"
+
+#: ui/app.slint:881
+msgid "The current version is already in the chosen place."
+msgstr "We wskazanym miejscu leży już bieżąca wersja."
+
+#: ui/app.slint:893
+msgid "Leftover archives on the disk: {}"
+msgstr "Pozostałości archiwów na dysku: {}"
+
+#: ui/app.slint:898
+msgid "Clear"
+msgstr "Wyczyść"
+
+#: ui/app.slint:939
+msgid "Download the same thing again?"
+msgstr "Pobrać to samo jeszcze raz?"
+
+#: ui/app.slint:954
+msgid "Downloading skips files that are already there, so they have to be removed first. Only what this model’s .ver file lists will be deleted — nothing else in that place is touched."
+msgstr "Pobieranie pomija pliki, które już są, więc najpierw trzeba je usunąć. Skasujemy wyłącznie to, co wymienia plik .ver tego modelu — niczego innego z tego miejsca nie ruszamy."
+
+#: ui/app.slint:969
+msgid "Delete and download"
+msgstr "Usuń i pobierz"
+
+#: ui/app.slint:996
+msgid "Erase everything on this medium?"
+msgstr "Skasować wszystko na tym nośniku?"
+
+#: ui/app.slint:1011
+msgid "Formatting as exFAT removes all data from this medium for good. Make sure the drive shown is the one you have in mind."
+msgstr "Formatowanie do exFAT usuwa wszystkie dane z tego nośnika bezpowrotnie. Upewnij się, że wskazany napęd to ten, o którym myślisz."
+
+#: ui/app.slint:1026
+msgid "Formatting…"
+msgstr "Formatuję…"
+
+#: ui/app.slint:1026
+msgid "Format"
+msgstr "Formatuj"
+
+#: rust
+msgid "Europe"
+msgstr "Europa"
+
+#: rust
+msgid "Brazil"
+msgstr "Brazylia"
+
+#: rust
+msgid "Canada"
+msgstr "Kanada"
+
+#: rust
+msgid "Indonesia"
+msgstr "Indonezja"
+
+#: rust
+msgid "India"
+msgstr "Indie"
+
+#: rust
+msgid "Japan"
+msgstr "Japonia"
+
+#: rust
+msgid "South Korea"
+msgstr "Korea Południowa"
+
+#: rust
+msgid "Middle East"
+msgstr "Bliski Wschód"
+
+#: rust
+msgid "New Zealand"
+msgstr "Nowa Zelandia"
+
+#: rust
+msgid "Russia and CIS"
+msgstr "Rosja i WNP"
+
+#: rust
+msgid "Singapore"
+msgstr "Singapur"
+
+#: rust
+msgid "Türkiye"
+msgstr "Turcja"
+
+#: rust
+msgid "United States"
+msgstr "Stany Zjednoczone"
+
+#: rust
+msgid "This model is published for several head-unit variants (e.g. ccNC and ccNC Lite). The files to download are identical for all of them — pick the number you see on the car’s screen."
+msgstr "Ten model jest wystawiony w kilku odmianach zestawu multimedialnego (np. ccNC i ccNC Lite). Pliki do pobrania są dla nich identyczne — numer wybierz ten, który widzisz na ekranie auta."
+
+#: rust
+msgid "{} - {}"
+msgstr "{} - {}"
+
+#: rust
+msgid "don’t know"
+msgstr "nie wiem"
+
+#: rust
+msgid "  ·  written in the .ver file"
+msgstr "  ·  zapisane w pliku .ver"
+
+#: rust
+msgid "  ·  we downloaded this"
+msgstr "  ·  to pobraliśmy"
+
+#: rust
+msgid "1 model"
+msgstr "1 model"
+
+#: rust
+msgid "{} models"
+msgstr "{} modeli"
+
+#: rust
+msgid "Asking the maker {} (watched: {}); a new release is brought up daily — woken by {}."
+msgstr "Pytam producenta {} (pilnowane: {}), o nowym wydaniu przypominam codziennie — budzi mnie {}."
+
+#: rust
+msgid "No way to check in the background — the schedule was not set up."
+msgstr "Nie mam jak sprawdzać w tle — harmonogram nie został założony."
+
+#: rust
+msgid "Watching {} — I will let you know when a new release appears."
+msgstr "Pilnuję {} — dam znać, gdy pojawi się nowe wydanie."
+
+#: rust
+msgid "No longer watching {}."
+msgstr "Przestaję pilnować {}."
+
+#: rust
+msgid "Asking the maker {}."
+msgstr "Pytam producenta {}."
+
+#: rust
+msgid "{} Woken by {}."
+msgstr "{} Budzi mnie {}."
+
+#: rust
+msgid "{} The schedule could not be set up, though: {}"
+msgstr "{} Nie udało się jednak założyć harmonogramu: {}"
+
+#: rust
+msgid "{}: the car has {}."
+msgstr "{}: w aucie {}."
+
+#: rust
+msgid "{}: unknown what the car has."
+msgstr "{}: nie wiadomo, co w aucie."
+
+#: rust
+msgid "{} removed from favourites."
+msgstr "{} usunięty z ulubionych."
+
+#: rust
+msgid "{} added to favourites."
+msgstr "{} dodany do ulubionych."
+
+#: rust
+msgid "checking the size…"
+msgstr "sprawdzam rozmiar…"
+
+#: rust
+msgid "{} to download · files: {}"
+msgstr "{} do pobrania · plików: {}"
+
+#: rust
+msgid "{} · files: {}"
+msgstr "{} · plików: {}"
+
+#: rust
+msgid "{} to download, {} on the medium · files: {}"
+msgstr "{} do pobrania, {} na nośniku · plików: {}"
+
+#: rust
+msgid "There are no files of a previous release there."
+msgstr "Nie ma tam plików poprzedniego wydania."
+
+#: rust
+msgid "Removed {} files of the previous release — {} recovered."
+msgstr "Usunięto {} plików poprzedniego wydania — odzyskane {}."
+
+#: rust
+msgid ""
+"{}\n"
+"To be removed: {} files, {}"
+msgstr ""
+"{}\n"
+"Do usunięcia: {} plików, {}"
+
+#: rust
+msgid "Leftover archives removed."
+msgstr "Pozostałości archiwów usunięte."
+
+#: rust
+msgid "Nothing to remove."
+msgstr "Nie ma czego usuwać."
+
+#: rust
+msgid "Could not clean up: {}"
+msgstr "Nie udało się posprzątać: {}"
+
+#: rust
+msgid "not mounted"
+msgstr "niezamontowany"
+
+#: rust
+msgid "needs exFAT"
+msgstr "wymaga exFAT"
+
+#: rust
+msgid "the medium already holds the current version"
+msgstr "na nośniku jest już bieżąca wersja"
+
+#: rust
+msgid "not enough space"
+msgstr "za mało miejsca"
+
+#: rust
+msgid "The removable medium holds a different firmware version; it will be removed once the current one is downloaded"
+msgstr "Na nośniku wymiennym znajduje się inna wersja oprogramowania i zostanie usunięta po pobraniu aktualnej"
+
+#: rust
+msgid "ready"
+msgstr "gotowy"
+
+#: rust
+msgid "{} · free {} of {}{}"
+msgstr "{} · wolne {} z {}{}"
+
+#: rust
+msgid "no file system"
+msgstr "brak systemu plików"
+
+#: rust
+msgid "No removable medium found. Internal and system disks are skipped."
+msgstr "Nie znaleziono nośnika wymiennego. Dyski wewnętrzne i systemowe są pomijane."
+
+#: rust
+msgid "Media found: {}."
+msgstr "Znaleziono nośników: {}."
+
+#: rust
+msgid "Could not detect media: {}"
+msgstr "Nie udało się wykryć nośników: {}"
+
+#: rust
+msgid "This medium is not mounted — plug it in again or mount it."
+msgstr "Ten nośnik nie jest zamontowany — podłącz go ponownie albo zamontuj."
+
+#: rust
+msgid "Formatting {} as exFAT…"
+msgstr "Formatowanie {} do exFAT…"
+
+#: rust
+msgid "{} formatted as exFAT."
+msgstr "{} sformatowany do exFAT."
+
+#: rust
+msgid "Formatting failed: {}"
+msgstr "Formatowanie nie powiodło się: {}"
+
+#: rust
+msgid "Download finished. Checksums verified."
+msgstr "Pobieranie zakończone. Sumy kontrolne sprawdzone."
+
+#: rust
+msgid "Download failed: {}"
+msgstr "Pobieranie nie powiodło się: {}"
+
+#: rust
+msgid "There is no ready firmware for this model on the disk."
+msgstr "Na dysku nie ma gotowego oprogramowania dla tego modelu."
+
+#: rust
+msgid "No medium chosen."
+msgstr "Nie wybrano nośnika."
+
+#: rust
+msgid "No model chosen."
+msgstr "Nie wybrano modelu."
+
+#: rust
+msgid "The medium has {} free and the data takes {}."
+msgstr "Na nośniku jest {} wolnego, a dane zajmują {}."
+
+#: rust
+msgid "Copied to the medium."
+msgstr "Skopiowane na nośnik."
+
+#: rust
+msgid "Copied to the medium; the copy on the disk removed."
+msgstr "Skopiowane na nośnik, kopia z dysku usunięta."
+
+#: rust
+msgid "Copied to the medium, but the copy on the disk was not removed — I could not confirm they match. Check the medium and remove it by hand."
+msgstr "Skopiowane na nośnik, ale kopii z dysku nie usunąłem — nie potwierdziłem zgodności. Sprawdź nośnik i usuń ją ręcznie."
+
+#: rust
+msgid "Copying interrupted. The medium does not hold complete data."
+msgstr "Kopiowanie przerwane. Na nośniku nie ma kompletnych danych."
+
+#: rust
+msgid "Copying failed: {}"
+msgstr "Kopiowanie nie powiodło się: {}"
+
+#: rust
+msgid "Copying interrupted: {}"
+msgstr "Kopiowanie przerwane: {}"
+
+#: rust
+msgid "Interrupting the copy…"
+msgstr "Przerywam kopiowanie…"
+
+#: rust
+msgid "Download paused. Click “Resume” to carry on from here."
+msgstr "Pobieranie wstrzymane. Kliknij „Wznów”, żeby wrócić do tego miejsca."
+
+#: rust
+msgid "Download cancelled — leftovers removed: {}."
+msgstr "Pobieranie anulowane — usunięte pozostałości: {}."
+
+#: rust
+msgid "Could not load favourites: {}"
+msgstr "Nie udało się wczytać ulubionych: {}"
+
+#: rust
+msgid "Pick a brand and a region — the model list loads by itself."
+msgstr "Wybierz markę i region — lista modeli pobierze się sama."
+
+#: rust
+msgid "Could not fetch the list: {}"
+msgstr "Nie udało się pobrać listy: {}"
+
+#: rust
+msgid "Could not fetch the details: {}"
+msgstr "Nie udało się pobrać informacji: {}"
+
+#: rust
+msgid "Fetching the model list…"
+msgstr "Pobieranie listy modeli…"
+
+#: rust
+msgid "size unknown"
+msgstr "rozmiar nieznany"
+
+#: rust
+msgid "This is not an update link."
+msgstr "To nie jest odnośnik aktualizacji."
+
+#: rust
+msgid "Recognising the link from the maker’s site…"
+msgstr "Rozpoznaję odnośnik ze strony producenta…"
+
+#: rust
+msgid "I don’t recognise this link. I checked {} in these regions: {}. If the car is from another region, pick it from the list and click again."
+msgstr "Nie rozpoznaję tego odnośnika. Sprawdziłem {} w regionach: {}. Jeśli auto jest z innego regionu, wybierz go z listy i kliknij ponownie."
+
+#: rust
+msgid "{} — {} to write"
+msgstr "{} — do zapisania {}"
+
+#: rust
+msgid "{} — size unknown"
+msgstr "{} — rozmiar nieznany"
+
+#: rust
+msgid "No model chosen"
+msgstr "Nie wybrano modelu"
+
+#: rust
+msgid "Target folder"
+msgstr "Katalog docelowy"
+
+#: rust
+msgid "Downloaded files need unpacking, so the removable medium has to hold the archives and the unpacked result at once: about {}. Writes to the flash memory double as a result. Use this only if you have a large medium and not enough free space on the hard disk."
+msgstr "Pobrane pliki wymagają rozpakowania i nośnik wymienny musi pomieścić naraz archiwa i wynik ich rozpakowywania: ok. {}. Zapis na kość pamięci jest przez to podwojony. Używaj tylko, jeśli masz duży nośnik i nie masz dość wolnego miejsca na dysku twardym."
+
+#: rust
+msgid "The downloaded archives ({}) go to the hard disk for the time being; only the unpacked result ({}) lands on the removable medium."
+msgstr "Pobrane archiwa ({}) trafią tymczasowo na dysk twardy, a na nośnik wymienny trafi tylko wynik ich rozpakowywania ({})."
+
+#: rust
+msgid "The downloaded archives will be unpacked into the chosen folder ({} needed). Once the download finishes, plug in the removable device and click “Refresh” to copy or move the data onto it."
+msgstr "Pobrane archiwa zostaną rozpakowane do wybranego katalogu (potrzeba {}). Po zakończeniu pobierania podłącz urządzenie przenośne i kliknij „Odśwież” celem skopiowania lub przeniesienia danych na podpięty nośnik."
+
+#: rust
+msgid "a systemd timer"
+msgstr "timer systemd"
+
+#: rust
+msgid "a cron entry"
+msgstr "wpis w cronie"
+
+#: rust
+msgid "startup at login"
+msgstr "uruchomienie przy logowaniu"
+
+#: rust
+msgid "daily"
+msgstr "codziennie"
+
+#: rust
+msgid "weekly"
+msgstr "co tydzień"
+
+#: rust
+msgid "monthly"
+msgstr "co miesiąc"
+
+#: rust
+msgid "Could not set up the rustls crypto provider."
+msgstr "Nie udało się ustawić dostawcy kryptografii rustls."
+
+#: rust
+msgid "{}: new map release"
+msgstr "{}: nowe wydanie map"
+
+#: rust
+msgid ""
+"{}{}\n"
+"The car has {}. I will remind you tomorrow, unless you copy the new files onto the medium or mark the car as having it."
+msgstr ""
+"{}{}\n"
+"W aucie masz {}. Przypomnę jutro, chyba że skopiujesz nowe pliki na nośnik albo zaznaczysz, że auto już je ma."
+
+#: rust
+msgid ""
+"{}{}\n"
+"I don’t know what version is in the car — mark it, so I can tell whether this is an update. Until then, I will remind you every day."
+msgstr ""
+"{}{}\n"
+"Nie wiem, jaka wersja jest w aucie — zaznacz ją, żeby było wiadomo, czy to aktualizacja. Do tego czasu przypomnę codziennie."
+
+#: rust
+msgid "Show"
+msgstr "Pokaż"
+
+#: rust
+msgid "The car already has it"
+msgstr "Auto już to ma"

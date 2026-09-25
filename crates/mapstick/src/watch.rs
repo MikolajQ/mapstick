@@ -25,7 +25,7 @@ use anyhow::{Context, Result};
 use jiff::{Timestamp, ToSpan};
 use mapstick_store::{Favourite, InstalledSource, Interval, Store};
 
-use crate::{BRANDS, brand_index, fetch_entries};
+use crate::{BRANDS, brand_index, fetch_entries, tr};
 
 /// Ile czasu dajemy powiadomieniu na przyciski, zanim uznamy, że nikt ich
 /// nie naciśnie. Bez tego proces potrafiłby stać do końca świata przy
@@ -45,7 +45,7 @@ struct News {
 
 impl News {
     fn summary(&self) -> String {
-        format!("{}: nowe wydanie map", self.label)
+        tr!("{}: new map release", self.label)
     }
 
     fn body(&self) -> String {
@@ -56,16 +56,19 @@ impl News {
             .unwrap_or_default();
 
         match &self.known {
-            Some(known) => format!(
-                "{released}{}\nW aucie masz {known}. Przypomnę jutro, chyba że skopiujesz \
-                 nowe pliki na nośnik albo zaznaczysz, że auto już je ma.",
-                self.version
+            Some(known) => tr!(
+                "{}{}\nThe car has {}. I will remind you tomorrow, unless you copy the new \
+                 files onto the medium or mark the car as having it.",
+                released,
+                self.version,
+                known
             ),
             // Bez wiedzy o aucie powiadomienie i tak ma sens — trzeba tylko
             // powiedzieć wprost, czego nie wiemy, i o co prosimy.
-            None => format!(
-                "{released}{}\nNie wiem, jaka wersja jest w aucie — zaznacz ją, żeby było \
-                 wiadomo, czy to aktualizacja. Do tego czasu przypomnę codziennie.",
+            None => tr!(
+                "{}{}\nI don’t know what version is in the car — mark it, so I can tell \
+                 whether this is an update. Until then, I will remind you every day.",
+                released,
                 self.version
             ),
         }
@@ -289,8 +292,8 @@ fn announce(news: &News) -> Result<()> {
 #[cfg(target_os = "linux")]
 fn show(mut notification: notify_rust::Notification, news: &News) -> Result<()> {
     let handle = notification
-        .action("pokaz", "Pokaż")
-        .action("mam", "Auto już to ma")
+        .action("pokaz", &tr!("Show"))
+        .action("mam", &tr!("The car already has it"))
         .show()?;
 
     // Czekanie na kliknięcie odbywa się w osobnym wątku, żeby pulpit, który
@@ -382,7 +385,7 @@ mod tests {
         let news = worth_saying(&favourite(), false, now()).unwrap();
 
         assert_eq!(news.known, None);
-        assert!(news.body().contains("Nie wiem, jaka wersja jest w aucie"));
+        assert!(news.body().contains("I don’t know what version is in the car"));
         assert!(news.body().contains("2026.07"));
     }
 
@@ -400,7 +403,7 @@ mod tests {
         f.installed_version = Some("NE1.001".to_owned());
 
         let news = worth_saying(&f, false, now()).unwrap();
-        assert!(news.body().contains("W aucie masz NE1.001."));
+        assert!(news.body().contains("The car has NE1.001."));
     }
 
     /// Sedno: przypomnienie wraca po dobie, nie po godzinie.
