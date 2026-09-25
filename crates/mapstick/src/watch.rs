@@ -19,11 +19,15 @@
 //! timer systemd, wpis w cronie i uruchomienie przy logowaniu wołają nas
 //! z różną regularnością, a logowanie potrafi zawołać trzy razy dziennie.
 
-use std::{collections::HashSet, time::Duration};
+use std::collections::HashSet;
+#[cfg(target_os = "linux")]
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use jiff::{Timestamp, ToSpan};
-use mapstick_store::{Favourite, InstalledSource, Interval, Store};
+use mapstick_store::{Favourite, Interval, Store};
+#[cfg(target_os = "linux")]
+use mapstick_store::InstalledSource;
 
 use crate::{BRANDS, brand_index, fetch_entries, tr};
 

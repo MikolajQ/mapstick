@@ -62,7 +62,10 @@ impl Kind {
     }
 }
 
-/// Nazwa własna wszystkich zakładanych plików i wpisów.
+/// Nazwa własna wszystkich zakładanych plików i wpisów. Używa jej tylko
+/// linuksowa trójka dróg (systemd/cron/autostart) — Windows i macOS mają
+/// własne, samodzielne nazwy niżej.
+#[cfg(target_os = "linux")]
 const NAME: &str = "mapstick-sprawdzanie";
 
 /// Ścieżka do naszej binarki. Harmonogram wymaga bezwzględnej — nie wie nic
