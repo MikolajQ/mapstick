@@ -30,6 +30,10 @@ use crate::{BRANDS, brand_index, fetch_entries, tr};
 /// Ile czasu dajemy powiadomieniu na przyciski, zanim uznamy, że nikt ich
 /// nie naciśnie. Bez tego proces potrafiłby stać do końca świata przy
 /// pulpicie, który powiadomień nie zamyka sam.
+///
+/// Przyciski w powiadomieniu ma na razie tylko Linux — `notify-rust` opiera
+/// je na specyfikacji D-Bus, której Windows i macOS nie mają.
+#[cfg(target_os = "linux")]
 const ACTION_WAIT: Duration = Duration::from_secs(30);
 
 /// O czym trzeba powiedzieć użytkownikowi.
@@ -257,7 +261,9 @@ fn worth_saying(favourite: &Favourite, force: bool, now: Timestamp) -> Option<Ne
 /// Zapisuje, że auto ma już to wydanie — z przycisku w powiadomieniu.
 ///
 /// Osobny proces, osobna blokada: okno aplikacji może być w tym czasie otwarte
-/// i sięgać po ten sam plik.
+/// i sięgać po ten sam plik. Wołane tylko z linuksowego `show` — gdzie indziej
+/// powiadomienie nie ma przycisków, którymi dałoby się to wywołać.
+#[cfg(target_os = "linux")]
 fn mark_installed(model_id: &str, version: &str) -> Result<()> {
     let path = mapstick_store::default_path();
     let _lock = mapstick_store::lock(&path)?;
@@ -320,7 +326,7 @@ fn show(mut notification: notify_rust::Notification, news: &News) -> Result<()> 
 }
 
 #[cfg(not(target_os = "linux"))]
-fn show(mut notification: notify_rust::Notification, _news: &News) -> Result<()> {
+fn show(notification: notify_rust::Notification, _news: &News) -> Result<()> {
     notification.show()?;
     Ok(())
 }

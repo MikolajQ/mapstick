@@ -32,14 +32,20 @@ use mapstick_store::Interval;
 /// Czym budzi nas system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
+    // Każdy wariant powstaje tylko w swoim module, więc na każdym systemie
+    // poza jednym reszta jest martwym kodem — stąd `allow` na wszystkich
+    // czterech, nie tylko na dwóch nowych.
+    #[allow(dead_code)]
     Systemd,
+    #[allow(dead_code)]
     Cron,
+    #[allow(dead_code)]
     Autostart,
     /// Windows: zadanie Harmonogramu zadań (`schtasks`).
-    #[allow(dead_code)] // konstruowany tylko w cfg(target_os = "windows")
+    #[allow(dead_code)]
     TaskScheduler,
     /// macOS: agent launchd użytkownika.
-    #[allow(dead_code)] // konstruowany tylko w cfg(target_os = "macos")
+    #[allow(dead_code)]
     Launchd,
 }
 

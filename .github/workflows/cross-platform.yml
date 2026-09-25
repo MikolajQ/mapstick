@@ -40,6 +40,14 @@ jobs:
           ref: separate-work-dir
           path: nudl
 
+      # Nagłówki, których Slint (winit + femtovg) potrzebuje do zbudowania
+      # się na Linuksie. Windows i macOS mają to wbudowane w system.
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libfontconfig1-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libinput-dev libudev-dev libwayland-dev libxkbcommon-dev
+
       - name: Build the whole workspace
         working-directory: mapstick
         run: cargo build --workspace --verbose
