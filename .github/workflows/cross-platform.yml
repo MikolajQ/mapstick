@@ -1,0 +1,53 @@
+name: Cross-platform build
+
+# Sprawdza, czy kod działający na razie tylko lokalnie na Linuksie w ogóle
+# kompiluje się na Windows i macOS — przede wszystkim schedule.rs (schtasks,
+# launchd) i mapstick-media, napisane bez dostępu do żadnego z tych systemów.
+# Nie testuje prawdziwego wykrywania czy formatowania nośników — runnery nie
+# mają interesujących dysków wymiennych, a formatowanie cudzego dysku w CI
+# nie ma sensu i byłoby niebezpieczne, gdyby test trafił nie tam, co trzeba.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/cross-platform.yml"
+
+jobs:
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout mapstick
+        uses: actions/checkout@v4
+        with:
+          path: mapstick
+
+      # Zależność ścieżkowa `../../../nudl` w Cargo.toml oczekuje forka nudl
+      # jako katalogu siostrzanego — dokładnie tak, jak stoi na maszynie
+      # deweloperskiej.
+      - name: Checkout nudl (separate-work-dir)
+        uses: actions/checkout@v4
+        with:
+          repository: MikolajQ/nudl
+          ref: separate-work-dir
+          path: nudl
+
+      - name: Build the whole workspace
+        working-directory: mapstick
+        run: cargo build --workspace --verbose
+
+      - name: Test the whole workspace
+        working-directory: mapstick
+        run: cargo test --workspace --verbose
+
+      - name: Clippy
+        working-directory: mapstick
+        run: cargo clippy --workspace --all-targets -- -D warnings
