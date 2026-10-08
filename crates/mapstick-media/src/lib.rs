@@ -14,6 +14,10 @@ use nudl::version::VersionInfo;
 mod linux;
 #[cfg(target_os = "linux")]
 use linux as backend;
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+use windows as backend;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -55,7 +59,8 @@ pub const SPACE_MARGIN_PERCENT: u64 = 15;
 /// Nośnik, na który wolno pisać.
 #[derive(Debug, Clone)]
 pub struct Medium {
-    /// Identyfikator wolumenu — na Linuksie ścieżka urządzenia partycji.
+    /// Identyfikator wolumenu — na Linuksie ścieżka urządzenia partycji
+    /// (`/dev/sdb1`), na Windows litera dysku (`E:`).
     pub id: String,
     /// Identyfikator całego napędu, do którego należy wolumen.
     pub drive_id: String,
@@ -218,11 +223,11 @@ pub fn is_efi_partition_type(partition_type: &str) -> bool {
 /// Lista nośników, na które wolno pisać. Napędy systemowe nie trafiają tu
 /// w ogóle — są odfiltrowane, a nie tylko ukryte w interfejsie.
 pub async fn list_media() -> Result<Vec<Medium>> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", windows))]
     {
         backend::list_media().await
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", windows)))]
     {
         Err(Error::Unsupported)
     }
@@ -234,11 +239,11 @@ pub async fn list_media() -> Result<Vec<Medium>> {
 /// bezpieczeństwa na świeżo odczytanym stanie systemu. Zgoda użytkownika to
 /// jednak sprawa warstwy wyżej — ta funkcja niczego nie pyta.
 pub async fn format_exfat(medium: &Medium, label: &str) -> Result<()> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", windows))]
     {
         backend::format_exfat(medium, label).await
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", windows)))]
     {
         let _ = (medium, label);
         Err(Error::Unsupported)
@@ -247,11 +252,11 @@ pub async fn format_exfat(medium: &Medium, label: &str) -> Result<()> {
 
 /// Wolne i całkowite miejsce w podanym katalogu.
 pub fn space_for(path: &Path) -> Result<Space> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", windows))]
     {
         backend::space_for(path)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", windows)))]
     {
         let _ = path;
         Err(Error::Unsupported)
