@@ -109,7 +109,7 @@ async fn gather(force: bool) -> Result<Vec<News>> {
 
     // Blokada obejmuje cały cykl odczyt-zmiana-zapis: w tym czasie otwarte
     // okno nie podmieni pliku pod nami.
-    let _lock = mapstick_store::lock(&path).context("Nie udało się zablokować pliku ulubionych")?;
+    let _lock = mapstick_store::lock(&path).with_context(|| tr!("Could not lock the favourites file"))?;
     let mut store = Store::load(&path)?;
 
     if store.watched().next().is_none() {

@@ -499,3 +499,123 @@ msgstr "작업 스케줄러 작업"
 #: rust
 msgid "a launchd agent"
 msgstr "launchd 에이전트"
+
+#: rust
+msgid "Could not append to {}"
+msgstr "{}에 덧붙이지 못했습니다"
+
+#: rust
+msgid "Could not check the free space in {}"
+msgstr "{}의 여유 공간을 확인하지 못했습니다"
+
+#: rust
+msgid "Could not check {}"
+msgstr "{}을(를) 확인하지 못했습니다"
+
+#: rust
+msgid "Could not create the HTTP client"
+msgstr "HTTP 클라이언트를 만들지 못했습니다"
+
+#: rust
+msgid "Could not create {}"
+msgstr "{}을(를) 만들지 못했습니다"
+
+#: rust
+msgid "Could not find where the MapStick program is"
+msgstr "MapStick 프로그램 위치를 찾지 못했습니다"
+
+#: rust
+msgid "Could not lock the favourites file"
+msgstr "즐겨찾기 파일을 잠그지 못했습니다"
+
+#: rust
+msgid "Could not move {} to {}"
+msgstr "{}을(를) {}(으)로 옮기지 못했습니다"
+
+#: rust
+msgid "Could not open {}"
+msgstr "{}을(를) 열지 못했습니다"
+
+#: rust
+msgid "Could not query {}"
+msgstr "{}에 질의하지 못했습니다"
+
+#: rust
+msgid "Could not read the file {}"
+msgstr "{} 파일을 읽지 못했습니다"
+
+#: rust
+msgid "Could not read the folder {}"
+msgstr "{} 폴더를 읽지 못했습니다"
+
+#: rust
+msgid "Could not read {}"
+msgstr "{}을(를) 읽지 못했습니다"
+
+#: rust
+msgid "Could not remove {}"
+msgstr "{}을(를) 삭제하지 못했습니다"
+
+#: rust
+msgid "Could not run {}"
+msgstr "{}을(를) 실행하지 못했습니다"
+
+#: rust
+msgid "Could not start MapStick again"
+msgstr "MapStick을 다시 시작하지 못했습니다"
+
+#: rust
+msgid "Could not talk to the disk service: {}"
+msgstr "디스크 서비스와 통신하지 못했습니다: {}"
+
+#: rust
+msgid "Could not write {}"
+msgstr "{}에 쓰지 못했습니다"
+
+#: rust
+msgid "Invalid .ver file: {}"
+msgstr "잘못된 .ver 파일: {}"
+
+#: rust
+msgid "No destination folder was chosen."
+msgstr "대상 폴더를 선택하지 않았습니다."
+
+#: rust
+msgid "Refused: {} holds system data and cannot be a target"
+msgstr "거부됨: {}에는 시스템 데이터가 있어 대상이 될 수 없습니다"
+
+#: rust
+msgid "The disk service refused: {}"
+msgstr "디스크 서비스가 거부했습니다: {}"
+
+#: rust
+msgid "The file {} has an invalid format"
+msgstr "{} 파일의 형식이 잘못되었습니다"
+
+#: rust
+msgid "The folder {} holds {} .ver files instead of one"
+msgstr "{} 폴더에 .ver 파일이 하나가 아니라 {}개 있습니다"
+
+#: rust
+msgid "The medium {} is not mounted"
+msgstr "미디어 {}이(가) 마운트되지 않았습니다"
+
+#: rust
+msgid "There is no {} command"
+msgstr "{} 명령이 없습니다"
+
+#: rust
+msgid "This system is not supported yet"
+msgstr "이 시스템은 아직 지원되지 않습니다"
+
+#: rust
+msgid "Unexpected response from {}"
+msgstr "{}에서 예상치 못한 응답"
+
+#: rust
+msgid "{} does not accept input"
+msgstr "{}이(가) 입력을 받지 않습니다"
+
+#: rust
+msgid "{} failed: {}"
+msgstr "{} 실패: {}"

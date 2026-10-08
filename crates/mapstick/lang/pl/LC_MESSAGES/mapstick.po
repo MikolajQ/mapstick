@@ -637,3 +637,123 @@ msgstr "zadanie Harmonogramu zadań"
 #: rust
 msgid "a launchd agent"
 msgstr "agent launchd"
+
+#: rust
+msgid "Could not append to {}"
+msgstr "Nie udało się dopisać do {}"
+
+#: rust
+msgid "Could not check the free space in {}"
+msgstr "Nie udało się sprawdzić wolnego miejsca w {}"
+
+#: rust
+msgid "Could not check {}"
+msgstr "Nie udało się sprawdzić {}"
+
+#: rust
+msgid "Could not create the HTTP client"
+msgstr "Nie udało się utworzyć klienta HTTP"
+
+#: rust
+msgid "Could not create {}"
+msgstr "Nie udało się utworzyć {}"
+
+#: rust
+msgid "Could not find where the MapStick program is"
+msgstr "Nie wiem, gdzie leży program MapStick"
+
+#: rust
+msgid "Could not lock the favourites file"
+msgstr "Nie udało się zablokować pliku ulubionych"
+
+#: rust
+msgid "Could not move {} to {}"
+msgstr "Nie udało się przenieść {} do {}"
+
+#: rust
+msgid "Could not open {}"
+msgstr "Nie udało się otworzyć {}"
+
+#: rust
+msgid "Could not query {}"
+msgstr "Nie udało się odpytać {}"
+
+#: rust
+msgid "Could not read the file {}"
+msgstr "Nie udało się odczytać pliku {}"
+
+#: rust
+msgid "Could not read the folder {}"
+msgstr "Nie udało się odczytać katalogu {}"
+
+#: rust
+msgid "Could not read {}"
+msgstr "Nie udało się odczytać {}"
+
+#: rust
+msgid "Could not remove {}"
+msgstr "Nie udało się usunąć {}"
+
+#: rust
+msgid "Could not run {}"
+msgstr "Nie udało się uruchomić {}"
+
+#: rust
+msgid "Could not start MapStick again"
+msgstr "Nie udało się ponownie uruchomić MapSticka"
+
+#: rust
+msgid "Could not talk to the disk service: {}"
+msgstr "Błąd komunikacji z usługą dysków: {}"
+
+#: rust
+msgid "Could not write {}"
+msgstr "Nie udało się zapisać {}"
+
+#: rust
+msgid "Invalid .ver file: {}"
+msgstr "Niepoprawny plik .ver: {}"
+
+#: rust
+msgid "No destination folder was chosen."
+msgstr "Nie wybrano katalogu docelowego."
+
+#: rust
+msgid "Refused: {} holds system data and cannot be a target"
+msgstr "Odmowa: {} zawiera dane systemu i nie może być celem"
+
+#: rust
+msgid "The disk service refused: {}"
+msgstr "Usługa dysków odmówiła: {}"
+
+#: rust
+msgid "The file {} has an invalid format"
+msgstr "Plik {} ma niepoprawny format"
+
+#: rust
+msgid "The folder {} holds {} .ver files instead of one"
+msgstr "Katalog {} zawiera {} plików .ver zamiast jednego"
+
+#: rust
+msgid "The medium {} is not mounted"
+msgstr "Nośnik {} nie jest zamontowany"
+
+#: rust
+msgid "There is no {} command"
+msgstr "Nie ma polecenia {}"
+
+#: rust
+msgid "This system is not supported yet"
+msgstr "Ten system nie jest jeszcze obsługiwany"
+
+#: rust
+msgid "Unexpected response from {}"
+msgstr "Nieoczekiwana odpowiedź z {}"
+
+#: rust
+msgid "{} does not accept input"
+msgstr "{} nie przyjmuje danych"
+
+#: rust
+msgid "{} failed: {}"
+msgstr "{} nie powiodło się: {}"

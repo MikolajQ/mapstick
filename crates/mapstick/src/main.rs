@@ -240,6 +240,46 @@ fn medium_label(medium: &Medium) -> String {
     }
 }
 
+/// Błąd do pokazania w oknie, w języku okna.
+///
+/// `mapstick-media` i `mapstick-store` nie mają tłumaczeń — opisują błędy
+/// po polsku, na potrzeby dziennika — więc ich warianty tłumaczymy tutaj.
+/// Resztę (nudl, system) pokazujemy tak, jak przyszła: komunikaty Windows
+/// i tak są w języku systemu.
+fn describe(error: &(dyn std::error::Error + 'static)) -> String {
+    use mapstick_media::Error as M;
+    use mapstick_store::Error as S;
+
+    if let Some(e) = error.downcast_ref::<M>() {
+        return match e {
+            M::ReadDir(path, _) => tr!("Could not read the folder {}", path.display()),
+            M::ReadFile(path, _) => tr!("Could not read the file {}", path.display()),
+            M::VerFileCount(path, count) => {
+                tr!("The folder {} holds {} .ver files instead of one", path.display(), count)
+            }
+            M::InvalidVerFile(path, _) => tr!("Invalid .ver file: {}", path.display()),
+            M::Space(path, _) => tr!("Could not check the free space in {}", path.display()),
+            M::NotMounted(medium) => tr!("The medium {} is not mounted", medium),
+            M::SystemDisk(medium) => {
+                tr!("Refused: {} holds system data and cannot be a target", medium)
+            }
+            M::Backend(source) => tr!("Could not talk to the disk service: {}", source),
+            M::Service(reason) => tr!("The disk service refused: {}", reason),
+            M::Unsupported => tr!("This system is not supported yet"),
+        };
+    }
+
+    if let Some(e) = error.downcast_ref::<S>() {
+        return match e {
+            S::Read(path, _) => tr!("Could not read {}", path.display()),
+            S::Write(path, _) => tr!("Could not write {}", path.display()),
+            S::Parse(path, _) => tr!("The file {} has an invalid format", path.display()),
+        };
+    }
+
+    error.to_string()
+}
+
 /// Ile bajtów poleci przez sieć i ile zajmie na nośniku.
 ///
 /// To dwie różne liczby: pliki przychodzą spakowane, a na nośnik trafiają
@@ -1647,7 +1687,7 @@ impl Worker {
             Err(e) => {
                 self.media.clear();
                 self.push_media_rows();
-                self.set_status(tr!("Could not detect media: {}", e), true);
+                self.set_status(tr!("Could not detect media: {}", describe(&e)), true);
             }
         }
 
@@ -1778,7 +1818,7 @@ impl Worker {
                 self.set_status(tr!("{} formatted as exFAT.", medium.id), false);
                 self.refresh_media().await;
             }
-            Err(e) => self.set_status(tr!("Formatting failed: {}", e), true),
+            Err(e) => self.set_status(tr!("Formatting failed: {}", describe(&e)), true),
         }
     }
 
@@ -1857,7 +1897,7 @@ impl Worker {
         let output = self
             .output_dir
             .clone()
-            .ok_or_else(|| anyhow!("Nie wybrano katalogu docelowego."))?;
+            .ok_or_else(|| anyhow!(tr!("No destination folder was chosen.")))?;
 
         let car = self.entries[index].car.clone();
         let authority = ambient_authority();
@@ -2374,7 +2414,7 @@ impl Worker {
         self.store = match Store::load(&self.store_path) {
             Ok(store) => store,
             Err(e) => {
-                self.set_status(tr!("Could not load favourites: {}", e), true);
+                self.set_status(tr!("Could not load favourites: {}", describe(&e)), true);
                 Store::default()
             }
         };
@@ -3015,7 +3055,7 @@ fn relaunch_with_software_renderer(error: &slint::PlatformError) -> Result<()> {
         .args(std::env::args_os().skip(1))
         .env("SLINT_BACKEND", "winit-software")
         .spawn()
-        .context("Nie udało się uruchomić MapSticka ponownie")?;
+        .with_context(|| tr!("Could not start MapStick again"))?;
 
     std::process::exit(0);
 }

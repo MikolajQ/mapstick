@@ -499,3 +499,123 @@ msgstr "uma tarefa do Agendador de Tarefas"
 #: rust
 msgid "a launchd agent"
 msgstr "um agente do launchd"
+
+#: rust
+msgid "Could not append to {}"
+msgstr "Não foi possível acrescentar a {}"
+
+#: rust
+msgid "Could not check the free space in {}"
+msgstr "Não foi possível verificar o espaço livre em {}"
+
+#: rust
+msgid "Could not check {}"
+msgstr "Não foi possível verificar {}"
+
+#: rust
+msgid "Could not create the HTTP client"
+msgstr "Não foi possível criar o cliente HTTP"
+
+#: rust
+msgid "Could not create {}"
+msgstr "Não foi possível criar {}"
+
+#: rust
+msgid "Could not find where the MapStick program is"
+msgstr "Não foi possível encontrar onde está o programa MapStick"
+
+#: rust
+msgid "Could not lock the favourites file"
+msgstr "Não foi possível bloquear o arquivo de favoritos"
+
+#: rust
+msgid "Could not move {} to {}"
+msgstr "Não foi possível mover {} para {}"
+
+#: rust
+msgid "Could not open {}"
+msgstr "Não foi possível abrir {}"
+
+#: rust
+msgid "Could not query {}"
+msgstr "Não foi possível consultar {}"
+
+#: rust
+msgid "Could not read the file {}"
+msgstr "Não foi possível ler o arquivo {}"
+
+#: rust
+msgid "Could not read the folder {}"
+msgstr "Não foi possível ler a pasta {}"
+
+#: rust
+msgid "Could not read {}"
+msgstr "Não foi possível ler {}"
+
+#: rust
+msgid "Could not remove {}"
+msgstr "Não foi possível remover {}"
+
+#: rust
+msgid "Could not run {}"
+msgstr "Não foi possível executar {}"
+
+#: rust
+msgid "Could not start MapStick again"
+msgstr "Não foi possível iniciar o MapStick novamente"
+
+#: rust
+msgid "Could not talk to the disk service: {}"
+msgstr "Não foi possível comunicar com o serviço de discos: {}"
+
+#: rust
+msgid "Could not write {}"
+msgstr "Não foi possível gravar {}"
+
+#: rust
+msgid "Invalid .ver file: {}"
+msgstr "Arquivo .ver inválido: {}"
+
+#: rust
+msgid "No destination folder was chosen."
+msgstr "Nenhuma pasta de destino foi escolhida."
+
+#: rust
+msgid "Refused: {} holds system data and cannot be a target"
+msgstr "Recusado: {} contém dados do sistema e não pode ser o destino"
+
+#: rust
+msgid "The disk service refused: {}"
+msgstr "O serviço de discos recusou: {}"
+
+#: rust
+msgid "The file {} has an invalid format"
+msgstr "O arquivo {} tem um formato inválido"
+
+#: rust
+msgid "The folder {} holds {} .ver files instead of one"
+msgstr "A pasta {} contém {} arquivos .ver em vez de um"
+
+#: rust
+msgid "The medium {} is not mounted"
+msgstr "A mídia {} não está montada"
+
+#: rust
+msgid "There is no {} command"
+msgstr "O comando {} não existe"
+
+#: rust
+msgid "This system is not supported yet"
+msgstr "Este sistema ainda não é compatível"
+
+#: rust
+msgid "Unexpected response from {}"
+msgstr "Resposta inesperada de {}"
+
+#: rust
+msgid "{} does not accept input"
+msgstr "{} não aceita dados"
+
+#: rust
+msgid "{} failed: {}"
+msgstr "{} falhou: {}"

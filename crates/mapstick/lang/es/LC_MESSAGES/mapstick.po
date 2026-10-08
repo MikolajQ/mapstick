@@ -499,3 +499,123 @@ msgstr "una tarea del Programador de tareas"
 #: rust
 msgid "a launchd agent"
 msgstr "un agente de launchd"
+
+#: rust
+msgid "Could not append to {}"
+msgstr "No se pudo añadir a {}"
+
+#: rust
+msgid "Could not check the free space in {}"
+msgstr "No se pudo comprobar el espacio libre en {}"
+
+#: rust
+msgid "Could not check {}"
+msgstr "No se pudo comprobar {}"
+
+#: rust
+msgid "Could not create the HTTP client"
+msgstr "No se pudo crear el cliente HTTP"
+
+#: rust
+msgid "Could not create {}"
+msgstr "No se pudo crear {}"
+
+#: rust
+msgid "Could not find where the MapStick program is"
+msgstr "No se encuentra dónde está el programa MapStick"
+
+#: rust
+msgid "Could not lock the favourites file"
+msgstr "No se pudo bloquear el archivo de favoritos"
+
+#: rust
+msgid "Could not move {} to {}"
+msgstr "No se pudo mover {} a {}"
+
+#: rust
+msgid "Could not open {}"
+msgstr "No se pudo abrir {}"
+
+#: rust
+msgid "Could not query {}"
+msgstr "No se pudo consultar {}"
+
+#: rust
+msgid "Could not read the file {}"
+msgstr "No se pudo leer el archivo {}"
+
+#: rust
+msgid "Could not read the folder {}"
+msgstr "No se pudo leer la carpeta {}"
+
+#: rust
+msgid "Could not read {}"
+msgstr "No se pudo leer {}"
+
+#: rust
+msgid "Could not remove {}"
+msgstr "No se pudo eliminar {}"
+
+#: rust
+msgid "Could not run {}"
+msgstr "No se pudo ejecutar {}"
+
+#: rust
+msgid "Could not start MapStick again"
+msgstr "No se pudo volver a iniciar MapStick"
+
+#: rust
+msgid "Could not talk to the disk service: {}"
+msgstr "No se pudo comunicar con el servicio de discos: {}"
+
+#: rust
+msgid "Could not write {}"
+msgstr "No se pudo escribir {}"
+
+#: rust
+msgid "Invalid .ver file: {}"
+msgstr "Archivo .ver no válido: {}"
+
+#: rust
+msgid "No destination folder was chosen."
+msgstr "No se ha elegido ninguna carpeta de destino."
+
+#: rust
+msgid "Refused: {} holds system data and cannot be a target"
+msgstr "Rechazado: {} contiene datos del sistema y no puede ser el destino"
+
+#: rust
+msgid "The disk service refused: {}"
+msgstr "El servicio de discos lo rechazó: {}"
+
+#: rust
+msgid "The file {} has an invalid format"
+msgstr "El archivo {} tiene un formato no válido"
+
+#: rust
+msgid "The folder {} holds {} .ver files instead of one"
+msgstr "La carpeta {} contiene {} archivos .ver en lugar de uno"
+
+#: rust
+msgid "The medium {} is not mounted"
+msgstr "El soporte {} no está montado"
+
+#: rust
+msgid "There is no {} command"
+msgstr "No existe el comando {}"
+
+#: rust
+msgid "This system is not supported yet"
+msgstr "Este sistema aún no es compatible"
+
+#: rust
+msgid "Unexpected response from {}"
+msgstr "Respuesta inesperada de {}"
+
+#: rust
+msgid "{} does not accept input"
+msgstr "{} no acepta datos"
+
+#: rust
+msgid "{} failed: {}"
+msgstr "{} falló: {}"

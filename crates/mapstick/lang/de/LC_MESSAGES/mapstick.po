@@ -499,3 +499,123 @@ msgstr "einer Aufgabe der Aufgabenplanung"
 #: rust
 msgid "a launchd agent"
 msgstr "einem launchd-Agenten"
+
+#: rust
+msgid "Could not append to {}"
+msgstr "Konnte nicht an {} anhängen"
+
+#: rust
+msgid "Could not check the free space in {}"
+msgstr "Freier Speicherplatz in {} konnte nicht geprüft werden"
+
+#: rust
+msgid "Could not check {}"
+msgstr "{} konnte nicht geprüft werden"
+
+#: rust
+msgid "Could not create the HTTP client"
+msgstr "HTTP-Client konnte nicht erstellt werden"
+
+#: rust
+msgid "Could not create {}"
+msgstr "{} konnte nicht erstellt werden"
+
+#: rust
+msgid "Could not find where the MapStick program is"
+msgstr "Der Speicherort des MapStick-Programms ist unbekannt"
+
+#: rust
+msgid "Could not lock the favourites file"
+msgstr "Die Favoritendatei konnte nicht gesperrt werden"
+
+#: rust
+msgid "Could not move {} to {}"
+msgstr "{} konnte nicht nach {} verschoben werden"
+
+#: rust
+msgid "Could not open {}"
+msgstr "{} konnte nicht geöffnet werden"
+
+#: rust
+msgid "Could not query {}"
+msgstr "{} konnte nicht abgefragt werden"
+
+#: rust
+msgid "Could not read the file {}"
+msgstr "Die Datei {} konnte nicht gelesen werden"
+
+#: rust
+msgid "Could not read the folder {}"
+msgstr "Der Ordner {} konnte nicht gelesen werden"
+
+#: rust
+msgid "Could not read {}"
+msgstr "{} konnte nicht gelesen werden"
+
+#: rust
+msgid "Could not remove {}"
+msgstr "{} konnte nicht entfernt werden"
+
+#: rust
+msgid "Could not run {}"
+msgstr "{} konnte nicht ausgeführt werden"
+
+#: rust
+msgid "Could not start MapStick again"
+msgstr "MapStick konnte nicht erneut gestartet werden"
+
+#: rust
+msgid "Could not talk to the disk service: {}"
+msgstr "Keine Verbindung zum Datenträgerdienst: {}"
+
+#: rust
+msgid "Could not write {}"
+msgstr "{} konnte nicht geschrieben werden"
+
+#: rust
+msgid "Invalid .ver file: {}"
+msgstr "Ungültige .ver-Datei: {}"
+
+#: rust
+msgid "No destination folder was chosen."
+msgstr "Es wurde kein Zielordner gewählt."
+
+#: rust
+msgid "Refused: {} holds system data and cannot be a target"
+msgstr "Abgelehnt: {} enthält Systemdaten und kann kein Ziel sein"
+
+#: rust
+msgid "The disk service refused: {}"
+msgstr "Der Datenträgerdienst hat abgelehnt: {}"
+
+#: rust
+msgid "The file {} has an invalid format"
+msgstr "Die Datei {} hat ein ungültiges Format"
+
+#: rust
+msgid "The folder {} holds {} .ver files instead of one"
+msgstr "Der Ordner {} enthält {} .ver-Dateien statt einer"
+
+#: rust
+msgid "The medium {} is not mounted"
+msgstr "Der Datenträger {} ist nicht eingebunden"
+
+#: rust
+msgid "There is no {} command"
+msgstr "Den Befehl {} gibt es nicht"
+
+#: rust
+msgid "This system is not supported yet"
+msgstr "Dieses System wird noch nicht unterstützt"
+
+#: rust
+msgid "Unexpected response from {}"
+msgstr "Unerwartete Antwort von {}"
+
+#: rust
+msgid "{} does not accept input"
+msgstr "{} nimmt keine Eingabe an"
+
+#: rust
+msgid "{} failed: {}"
+msgstr "{} fehlgeschlagen: {}"

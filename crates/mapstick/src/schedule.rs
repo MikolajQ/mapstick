@@ -29,6 +29,8 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, anyhow};
 use mapstick_store::Interval;
 
+use crate::tr;
+
 /// Czym budzi nas system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -71,7 +73,7 @@ const NAME: &str = "mapstick-sprawdzanie";
 /// Ścieżka do naszej binarki. Harmonogram wymaga bezwzględnej — nie wie nic
 /// o katalogu, z którego ktoś uruchomił aplikację.
 fn binary() -> Result<PathBuf> {
-    std::env::current_exe().context("Nie wiem, gdzie leży binarka MapSticka")
+    std::env::current_exe().with_context(|| tr!("Could not find where the MapStick program is"))
 }
 
 #[cfg(target_os = "linux")]
@@ -121,10 +123,14 @@ mod linux {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status()
-            .context("Nie udało się uruchomić systemctl")?;
+            .with_context(|| tr!("Could not run {}", "systemctl"))?;
 
         if !status.success() {
-            return Err(anyhow!("systemctl --user {} zwróciło {status}", args.join(" ")));
+            return Err(anyhow!(tr!(
+                "{} failed: {}",
+                format!("systemctl --user {}", args.join(" ")),
+                status
+            )));
         }
 
         Ok(())
@@ -133,7 +139,7 @@ mod linux {
     fn write_units(interval: Interval) -> Result<()> {
         let directory = unit_dir();
         std::fs::create_dir_all(&directory)
-            .with_context(|| format!("Nie udało się utworzyć {}", directory.display()))?;
+            .with_context(|| tr!("Could not create {}", directory.display()))?;
 
         let service = format!(
             "[Unit]\n\
@@ -199,17 +205,17 @@ mod linux {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .context("Nie udało się uruchomić crontab")?;
+            .with_context(|| tr!("Could not run {}", "crontab"))?;
 
         child
             .stdin
             .as_mut()
-            .context("crontab nie przyjmuje danych")?
+            .with_context(|| tr!("{} does not accept input", "crontab"))?
             .write_all(text.as_bytes())?;
 
         let status = child.wait()?;
         if !status.success() {
-            return Err(anyhow!("crontab zwróciło {status}"));
+            return Err(anyhow!(tr!("{} failed: {}", "crontab", status)));
         }
 
         Ok(())
@@ -217,7 +223,7 @@ mod linux {
 
     /// Przepisuje crontab bez naszych wpisów, dokładając nowy, jeśli podany.
     fn crontab_set(line: Option<&str>) -> Result<()> {
-        let current = crontab_read().context("Nie ma polecenia crontab")?;
+        let current = crontab_read().with_context(|| tr!("There is no {} command", "crontab"))?;
 
         let mut text: String = current
             .lines()
@@ -253,7 +259,7 @@ mod linux {
         );
 
         std::fs::write(&path, desktop)
-            .with_context(|| format!("Nie udało się zapisać {}", path.display()))?;
+            .with_context(|| tr!("Could not write {}", path.display()))?;
 
         Ok(())
     }
@@ -338,7 +344,7 @@ mod windows {
             .stderr(Stdio::piped())
             .creation_flags(CREATE_NO_WINDOW)
             .output()
-            .context("Nie udało się uruchomić schtasks")
+            .with_context(|| tr!("Could not run {}", "schtasks"))
     }
 
     fn xml_escape(text: &str) -> String {
@@ -416,7 +422,7 @@ mod windows {
             .chain(xml.encode_utf16().flat_map(u16::to_le_bytes))
             .collect();
         std::fs::write(&path, bytes)
-            .with_context(|| format!("Nie udało się zapisać {}", path.display()))?;
+            .with_context(|| tr!("Could not write {}", path.display()))?;
 
         let output = schtasks(&[
             "/Create",
@@ -430,11 +436,15 @@ mod windows {
         let output = output?;
 
         if !output.status.success() {
-            return Err(anyhow!(
-                "schtasks /Create zwróciło {}: {}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr)
-            ));
+            return Err(anyhow!(tr!(
+                "{} failed: {}",
+                "schtasks /Create",
+                format!(
+                    "{} — {}",
+                    output.status,
+                    String::from_utf8_lossy(&output.stderr)
+                )
+            )));
         }
 
         Ok(Kind::TaskScheduler)
@@ -497,7 +507,7 @@ mod macos {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
-            .context("Nie udało się uruchomić launchctl")
+            .with_context(|| tr!("Could not run {}", "launchctl"))
     }
 
     fn random_hour() -> u32 {
@@ -516,7 +526,7 @@ mod macos {
 
         let directory = agents_dir();
         std::fs::create_dir_all(&directory)
-            .with_context(|| format!("Nie udało się utworzyć {}", directory.display()))?;
+            .with_context(|| tr!("Could not create {}", directory.display()))?;
 
         let exe = binary()?;
         let hour = random_hour();
@@ -554,15 +564,19 @@ mod macos {
 
         let path = plist_path();
         std::fs::write(&path, plist)
-            .with_context(|| format!("Nie udało się zapisać {}", path.display()))?;
+            .with_context(|| tr!("Could not write {}", path.display()))?;
 
         let output = launchctl(&["load", "-w", &path.to_string_lossy()])?;
         if !output.status.success() {
-            return Err(anyhow!(
-                "launchctl load zwróciło {}: {}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr)
-            ));
+            return Err(anyhow!(tr!(
+                "{} failed: {}",
+                "launchctl load",
+                format!(
+                    "{} — {}",
+                    output.status,
+                    String::from_utf8_lossy(&output.stderr)
+                )
+            )));
         }
 
         Ok(Kind::Launchd)

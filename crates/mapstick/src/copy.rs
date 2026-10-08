@@ -17,6 +17,8 @@ use std::{
 
 use anyhow::{Context, Result};
 
+use crate::tr;
+
 /// Katalog przejściowy, zakładany na nośniku na czas kopiowania.
 pub const STAGING: &str = ".mapstick-niegotowe";
 
@@ -44,10 +46,10 @@ pub fn stage_and_place(
     // nie wiadomo, które pliki są całe.
     if staging.exists() {
         fs::remove_dir_all(&staging)
-            .with_context(|| format!("Nie udało się usunąć {}", staging.display()))?;
+            .with_context(|| tr!("Could not remove {}", staging.display()))?;
     }
     fs::create_dir_all(&staging)
-        .with_context(|| format!("Nie udało się utworzyć {}", staging.display()))?;
+        .with_context(|| tr!("Could not create {}", staging.display()))?;
 
     if copy_dir(source, &staging, cancel, on_bytes)? == Outcome::Cancelled {
         return Ok(Outcome::Cancelled);
@@ -56,7 +58,7 @@ pub fn stage_and_place(
     place(&staging, target)?;
 
     fs::remove_dir_all(&staging)
-        .with_context(|| format!("Nie udało się usunąć {}", staging.display()))?;
+        .with_context(|| tr!("Could not remove {}", staging.display()))?;
 
     Ok(Outcome::Done)
 }
@@ -68,24 +70,24 @@ fn copy_dir(
     on_bytes: &mut dyn FnMut(u64),
 ) -> Result<Outcome> {
     let entries =
-        fs::read_dir(from).with_context(|| format!("Nie udało się odczytać {}", from.display()))?;
+        fs::read_dir(from).with_context(|| tr!("Could not read {}", from.display()))?;
 
     for entry in entries {
         if cancel.load(Ordering::Relaxed) {
             return Ok(Outcome::Cancelled);
         }
 
-        let entry = entry.with_context(|| format!("Nie udało się odczytać {}", from.display()))?;
+        let entry = entry.with_context(|| tr!("Could not read {}", from.display()))?;
         let source = entry.path();
         let target = to.join(entry.file_name());
 
         let kind = entry
             .file_type()
-            .with_context(|| format!("Nie udało się sprawdzić {}", source.display()))?;
+            .with_context(|| tr!("Could not check {}", source.display()))?;
 
         let outcome = if kind.is_dir() {
             fs::create_dir_all(&target)
-                .with_context(|| format!("Nie udało się utworzyć {}", target.display()))?;
+                .with_context(|| tr!("Could not create {}", target.display()))?;
             copy_dir(&source, &target, cancel, on_bytes)?
         } else {
             copy_file(&source, &target, cancel, on_bytes)?
@@ -106,9 +108,9 @@ fn copy_file(
     on_bytes: &mut dyn FnMut(u64),
 ) -> Result<Outcome> {
     let mut input = fs::File::open(source)
-        .with_context(|| format!("Nie udało się otworzyć {}", source.display()))?;
+        .with_context(|| tr!("Could not open {}", source.display()))?;
     let mut output = fs::File::create(target)
-        .with_context(|| format!("Nie udało się utworzyć {}", target.display()))?;
+        .with_context(|| tr!("Could not create {}", target.display()))?;
 
     let mut buffer = vec![0u8; CHUNK];
 
@@ -119,7 +121,7 @@ fn copy_file(
 
         let read = input
             .read(&mut buffer)
-            .with_context(|| format!("Nie udało się odczytać {}", source.display()))?;
+            .with_context(|| tr!("Could not read {}", source.display()))?;
 
         if read == 0 {
             break;
@@ -127,7 +129,7 @@ fn copy_file(
 
         output
             .write_all(&buffer[..read])
-            .with_context(|| format!("Nie udało się zapisać {}", target.display()))?;
+            .with_context(|| tr!("Could not write {}", target.display()))?;
 
         on_bytes(read as u64);
     }
@@ -136,7 +138,7 @@ fn copy_file(
     // się wyjąć z niedopisanymi danymi.
     output
         .sync_all()
-        .with_context(|| format!("Nie udało się dopisać {}", target.display()))?;
+        .with_context(|| tr!("Could not append to {}", target.display()))?;
 
     Ok(Outcome::Done)
 }
@@ -147,12 +149,12 @@ fn copy_file(
 /// natychmiastowa, bez drugiego przepisywania danych.
 fn place(staging: &Path, target: &Path) -> Result<()> {
     let entries = fs::read_dir(staging)
-        .with_context(|| format!("Nie udało się odczytać {}", staging.display()))?;
+        .with_context(|| tr!("Could not read {}", staging.display()))?;
 
     let mut paths: Vec<PathBuf> = Vec::new();
     for entry in entries {
         let entry =
-            entry.with_context(|| format!("Nie udało się odczytać {}", staging.display()))?;
+            entry.with_context(|| tr!("Could not read {}", staging.display()))?;
         paths.push(entry.path());
     }
 
@@ -170,7 +172,7 @@ fn place(staging: &Path, target: &Path) -> Result<()> {
         // systemu.
         if destination.exists() {
             let previous = fs::symlink_metadata(&destination).with_context(|| {
-                format!("Nie udało się sprawdzić {}", destination.display())
+                tr!("Could not check {}", destination.display())
             })?;
 
             if previous.is_dir() {
@@ -178,12 +180,12 @@ fn place(staging: &Path, target: &Path) -> Result<()> {
             } else {
                 fs::remove_file(&destination)
             }
-            .with_context(|| format!("Nie udało się usunąć {}", destination.display()))?;
+            .with_context(|| tr!("Could not remove {}", destination.display()))?;
         }
 
         fs::rename(&path, &destination).with_context(|| {
-            format!(
-                "Nie udało się przenieść {} do {}",
+            tr!(
+                "Could not move {} to {}",
                 path.display(),
                 destination.display()
             )

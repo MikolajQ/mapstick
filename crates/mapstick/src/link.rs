@@ -26,6 +26,8 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::tr;
+
 /// Schematy URI przypisane markom, w postaci używanej w pliku ulubionych.
 const SCHEMES: &[(&str, &str)] = &[
     ("com.hyundai.update.nau", "hyundai"),
@@ -164,7 +166,7 @@ pub async fn collect(brand: &str, code: &str, region: &str) -> Result<Vec<(Strin
     let client = reqwest::Client::builder()
         .user_agent("MapStick")
         .build()
-        .context("Nie udało się utworzyć klienta HTTP")?;
+        .with_context(|| tr!("Could not create the HTTP client"))?;
 
     let url = format!("{}/api/car/model", host_for(brand));
     let body = serde_json::json!({
@@ -176,10 +178,10 @@ pub async fn collect(brand: &str, code: &str, region: &str) -> Result<Vec<(Strin
         .json(&body)
         .send()
         .await
-        .with_context(|| format!("Nie udało się odpytać {url}"))?
+        .with_context(|| tr!("Could not query {}", url))?
         .json()
         .await
-        .with_context(|| format!("Nieoczekiwana odpowiedź z {url}"))?;
+        .with_context(|| tr!("Unexpected response from {}", url))?;
 
     let files = file_urls(&catalogue);
     tracing::info!("{brand}/{region}: {} plików z wersjami", files.len());

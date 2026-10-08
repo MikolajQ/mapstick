@@ -499,3 +499,123 @@ msgstr "une tâche du Planificateur de tâches"
 #: rust
 msgid "a launchd agent"
 msgstr "un agent launchd"
+
+#: rust
+msgid "Could not append to {}"
+msgstr "Impossible d’ajouter à {}"
+
+#: rust
+msgid "Could not check the free space in {}"
+msgstr "Impossible de vérifier l’espace libre dans {}"
+
+#: rust
+msgid "Could not check {}"
+msgstr "Impossible de vérifier {}"
+
+#: rust
+msgid "Could not create the HTTP client"
+msgstr "Impossible de créer le client HTTP"
+
+#: rust
+msgid "Could not create {}"
+msgstr "Impossible de créer {}"
+
+#: rust
+msgid "Could not find where the MapStick program is"
+msgstr "Impossible de trouver l’emplacement du programme MapStick"
+
+#: rust
+msgid "Could not lock the favourites file"
+msgstr "Impossible de verrouiller le fichier des favoris"
+
+#: rust
+msgid "Could not move {} to {}"
+msgstr "Impossible de déplacer {} vers {}"
+
+#: rust
+msgid "Could not open {}"
+msgstr "Impossible d’ouvrir {}"
+
+#: rust
+msgid "Could not query {}"
+msgstr "Impossible d’interroger {}"
+
+#: rust
+msgid "Could not read the file {}"
+msgstr "Impossible de lire le fichier {}"
+
+#: rust
+msgid "Could not read the folder {}"
+msgstr "Impossible de lire le dossier {}"
+
+#: rust
+msgid "Could not read {}"
+msgstr "Impossible de lire {}"
+
+#: rust
+msgid "Could not remove {}"
+msgstr "Impossible de supprimer {}"
+
+#: rust
+msgid "Could not run {}"
+msgstr "Impossible d’exécuter {}"
+
+#: rust
+msgid "Could not start MapStick again"
+msgstr "Impossible de relancer MapStick"
+
+#: rust
+msgid "Could not talk to the disk service: {}"
+msgstr "Impossible de communiquer avec le service des disques : {}"
+
+#: rust
+msgid "Could not write {}"
+msgstr "Impossible d’écrire {}"
+
+#: rust
+msgid "Invalid .ver file: {}"
+msgstr "Fichier .ver non valide : {}"
+
+#: rust
+msgid "No destination folder was chosen."
+msgstr "Aucun dossier de destination n’a été choisi."
+
+#: rust
+msgid "Refused: {} holds system data and cannot be a target"
+msgstr "Refusé : {} contient des données système et ne peut pas être la cible"
+
+#: rust
+msgid "The disk service refused: {}"
+msgstr "Le service des disques a refusé : {}"
+
+#: rust
+msgid "The file {} has an invalid format"
+msgstr "Le fichier {} a un format non valide"
+
+#: rust
+msgid "The folder {} holds {} .ver files instead of one"
+msgstr "Le dossier {} contient {} fichiers .ver au lieu d’un seul"
+
+#: rust
+msgid "The medium {} is not mounted"
+msgstr "Le support {} n’est pas monté"
+
+#: rust
+msgid "There is no {} command"
+msgstr "La commande {} est introuvable"
+
+#: rust
+msgid "This system is not supported yet"
+msgstr "Ce système n’est pas encore pris en charge"
+
+#: rust
+msgid "Unexpected response from {}"
+msgstr "Réponse inattendue de {}"
+
+#: rust
+msgid "{} does not accept input"
+msgstr "{} n’accepte pas de données"
+
+#: rust
+msgid "{} failed: {}"
+msgstr "Échec de {} : {}"
