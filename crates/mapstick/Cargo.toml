@@ -29,6 +29,10 @@ tokio = { version = "1.36.0", features = ["rt-multi-thread", "macros", "sync", "
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
+[target.'cfg(windows)'.dependencies]
+# Nazwany potok, którym drugie uruchomienie przekazuje odnośnik oknu (instance.rs).
+tokio = { version = "1.36.0", features = ["net", "io-util"] }
+
 [dev-dependencies]
 tempfile = "3.10.1"
 

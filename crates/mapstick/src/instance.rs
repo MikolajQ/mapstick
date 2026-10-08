@@ -111,13 +111,126 @@ pub fn cleanup() {
     let _ = std::fs::remove_file(socket_path());
 }
 
-#[cfg(not(unix))]
+/// Nazwany potok — windowsowy odpowiednik gniazda. Potoki są widoczne
+/// w całym systemie, stąd nazwa użytkownika: każdy ma mieć własne okno.
+#[cfg(windows)]
+fn pipe_name() -> String {
+    let user = std::env::var("USERNAME").unwrap_or_default();
+    format!(r"\\.\pipe\mapstick-{user}")
+}
+
+/// Podaje odnośnik działającej instancji.
+///
+/// `true` znaczy „przekazane, ten proces nie ma już nic do roboty”.
+#[cfg(windows)]
+pub fn hand_off(url: &str) -> bool {
+    use std::io::Write;
+
+    // Potok otwiera się jak plik; brak potoku = nikt nie nasłuchuje. Po
+    // zabitym procesie nie zostaje nic do sprzątania, inaczej niż z gniazdem.
+    let Ok(mut pipe) = std::fs::OpenOptions::new().write(true).open(pipe_name()) else {
+        return false;
+    };
+
+    if writeln!(pipe, "{url}").is_err() {
+        return false;
+    }
+
+    let _ = pipe.flush();
+    tracing::info!("Odnośnik przekazany działającej instancji");
+
+    true
+}
+
+/// Zaczyna nasłuch. Każde połączenie niesie jeden odnośnik w jednym wierszu.
+#[cfg(windows)]
+pub fn listen(on_link: impl Fn(String) + Send + 'static) {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    use tokio::net::windows::named_pipe::ServerOptions;
+
+    std::thread::Builder::new()
+        .name("mapstick-odnosniki".to_owned())
+        .spawn(move || {
+            let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                .enable_io()
+                .enable_time()
+                .build()
+            else {
+                return;
+            };
+
+            runtime.block_on(async move {
+                let name = pipe_name();
+                let options = || {
+                    let mut o = ServerOptions::new();
+                    // Tylko ten komputer; domyślne uprawnienia potoku i tak
+                    // dają zapis wyłącznie właścicielowi i administratorom.
+                    o.reject_remote_clients(true);
+                    o
+                };
+
+                // first_pipe_instance: jeśli potok już jest, nasłuchuje inne
+                // okno — nie podbieramy mu odnośników. Ale przez kilka sekund
+                // próbujemy dalej: przy przejściu na renderer programowy
+                // (main.rs) potok trzyma jeszcze nasz własny, kończący się
+                // poprzednik. Bez tego okno nie nasłuchiwałoby wcale —
+                // sprawdzone na Windows 11 bez OpenGL 2.
+                let mut attempts = 0;
+                let mut server = loop {
+                    match options().first_pipe_instance(true).create(&name) {
+                        Ok(s) => break s,
+                        Err(_) if attempts < 30 => {
+                            attempts += 1;
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        }
+                        Err(e) => {
+                            tracing::warn!("Nie nasłuchuję odnośników: {e}");
+                            return;
+                        }
+                    }
+                };
+
+                loop {
+                    if server.connect().await.is_err() {
+                        continue;
+                    }
+
+                    // Następna instancja potoku powstaje przed czytaniem, żeby
+                    // kolejny klient nie trafił w chwilę, gdy potoku nie ma.
+                    let connected = server;
+                    server = match options().create(&name) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            tracing::warn!("Nasłuch odnośników przerwany: {e}");
+                            return;
+                        }
+                    };
+
+                    let mut line = String::new();
+                    if BufReader::new(connected).read_line(&mut line).await.is_ok() {
+                        let url = line.trim().to_owned();
+
+                        if !url.is_empty() {
+                            on_link(url);
+                        }
+                    }
+                }
+            });
+        })
+        .ok();
+}
+
+/// Potok znika razem z procesem.
+#[cfg(windows)]
+pub fn cleanup() {}
+
+#[cfg(not(any(unix, windows)))]
 pub fn hand_off(_url: &str) -> bool {
     false
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 pub fn listen(_on_link: impl Fn(String) + Send + 'static) {}
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 pub fn cleanup() {}
