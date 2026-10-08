@@ -21,7 +21,9 @@ serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.140"
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal", "wayland"] }
 rustls = { version = "0.23.36", features = ["ring"], default-features = false }
-slint = { version = "1.17.1", features = ["raw-window-handle-06"] }
+# `~`, nie `^`: unstable-winit-030 (dopasowanie okna do ekranu na Windows)
+# Slint może zmienić w dowolnym wydaniu 1.x.
+slint = { version = "~1.17.1", features = ["raw-window-handle-06", "unstable-winit-030"] }
 sys-locale = "0.3.2"
 tokio = { version = "1.36.0", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tracing = "0.1.40"
@@ -31,4 +33,4 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tempfile = "3.10.1"
 
 [build-dependencies]
-slint-build = "1.17.1"
+slint-build = "~1.17.1"

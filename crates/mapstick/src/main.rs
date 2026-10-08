@@ -2906,6 +2906,9 @@ fn main() -> Result<()> {
         ui.invoke_pick_output_dir();
     }
 
+    #[cfg(windows)]
+    fit_on_screen(&ui);
+
     if let Err(e) = ui.run() {
         #[cfg(windows)]
         if needs_software_renderer(&e) {
@@ -2918,6 +2921,69 @@ fn main() -> Result<()> {
     instance::cleanup();
 
     Ok(())
+}
+
+/// Przesuwa okno na środek ekranu, a na ekranie mniejszym niż okno najpierw
+/// je zmniejsza.
+///
+/// Windows kładzie nowe okno kaskadowo, z przesunięciem od lewego górnego
+/// rogu, i nie pilnuje, czy zmieści się na ekranie: przy 1280 px szerokości
+/// prawa krawędź okna (1080 px) wychodziła poza ekran, przy 1024 px nie
+/// zmieściłoby się wcale. Na Linuksie okna rozkłada kompozytor, a Wayland
+/// i tak nie pozwala aplikacji ustawiać ich położenia.
+///
+/// Okno winit powstaje dopiero w pętli zdarzeń — stąd zadanie asynchroniczne,
+/// które na nie czeka.
+#[cfg(windows)]
+fn fit_on_screen(ui: &AppWindow) {
+    use slint::winit_030::{
+        WinitWindowAccessor,
+        winit::dpi::{PhysicalPosition, PhysicalSize},
+    };
+
+    let weak = ui.as_weak();
+    let spawned = slint::spawn_local(async move {
+        let Some(ui) = weak.upgrade() else {
+            return;
+        };
+        let Ok(window) = ui.window().winit_window().await else {
+            return;
+        };
+        let Some(monitor) = window.current_monitor() else {
+            return;
+        };
+
+        let screen = monitor.size();
+        let origin = monitor.position();
+        let outer = window.outer_size();
+        let inner = window.inner_size();
+
+        // Pasek zadań zabiera dół ekranu, a winit nie zna obszaru roboczego —
+        // zostawiamy na niego zapas.
+        let room = PhysicalSize::new(screen.width, screen.height * 92 / 100);
+
+        let frame = PhysicalSize::new(
+            outer.width.saturating_sub(inner.width),
+            outer.height.saturating_sub(inner.height),
+        );
+        let fitted = PhysicalSize::new(outer.width.min(room.width), outer.height.min(room.height));
+
+        if fitted != outer {
+            let _ = window.request_inner_size(PhysicalSize::new(
+                fitted.width.saturating_sub(frame.width),
+                fitted.height.saturating_sub(frame.height),
+            ));
+        }
+
+        window.set_outer_position(PhysicalPosition::new(
+            origin.x + ((room.width - fitted.width) / 2) as i32,
+            origin.y + ((room.height - fitted.height) / 2) as i32,
+        ));
+    });
+
+    if let Err(e) = spawned {
+        tracing::debug!("Nie dopasuję okna do ekranu: {e}");
+    }
 }
 
 /// Czy okno padło na braku OpenGL, a nie na czymś, czego zmiana renderera
