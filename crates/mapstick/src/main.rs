@@ -2901,10 +2901,52 @@ fn main() -> Result<()> {
         ui.invoke_pick_output_dir();
     }
 
-    ui.run()?;
+    if let Err(e) = ui.run() {
+        #[cfg(windows)]
+        if needs_software_renderer(&e) {
+            drop(ui);
+            return relaunch_with_software_renderer(&e);
+        }
+
+        return Err(e.into());
+    }
     instance::cleanup();
 
     Ok(())
+}
+
+/// Czy okno padło na braku OpenGL, a nie na czymś, czego zmiana renderera
+/// nie naprawi.
+///
+/// Femtovg (domyślny renderer Slinta) chce OpenGL 2+. Windows bez sterownika
+/// grafiki — maszyna wirtualna, Pulpit zdalny, stary laptop — ma tylko
+/// awaryjne OpenGL 1.1, w którym kontekst się tworzy, a dopiero pierwsze
+/// `glCreateShader` zawodzi. Slint przełącza się na renderer programowy
+/// tylko wtedy, gdy renderer nie da się w ogóle utworzyć, więc tego
+/// przypadku sam nie złapie. `SLINT_BACKEND` ustawione ręcznie znaczy, że
+/// ktoś wybrał renderer świadomie — wtedy nie zgadujemy.
+#[cfg(windows)]
+fn needs_software_renderer(error: &slint::PlatformError) -> bool {
+    std::env::var_os("SLINT_BACKEND").is_none() && error.to_string().contains("OpenGL")
+}
+
+/// Uruchamia MapSticka jeszcze raz, z rendererem programowym, i od razu
+/// kończy ten proces. Wyboru platformy Slint nie da się cofnąć w tym samym
+/// procesie, a czekać na następcę nie wolno: wątek sieciowy już ruszył
+/// i zapisywałby te same pliki co on.
+#[cfg(windows)]
+fn relaunch_with_software_renderer(error: &slint::PlatformError) -> Result<()> {
+    use anyhow::Context as _;
+
+    tracing::warn!("Brak używalnego OpenGL ({error}), uruchamiam z rendererem programowym");
+
+    std::process::Command::new(std::env::current_exe()?)
+        .args(std::env::args_os().skip(1))
+        .env("SLINT_BACKEND", "winit-software")
+        .spawn()
+        .context("Nie udało się uruchomić MapSticka ponownie")?;
+
+    std::process::exit(0);
 }
 
 /// Wiadomość z zewnątrz: odnośnik ze strony producenta albo model
