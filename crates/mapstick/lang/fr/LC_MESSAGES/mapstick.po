@@ -619,3 +619,7 @@ msgstr "{} n’accepte pas de données"
 #: rust
 msgid "{} failed: {}"
 msgstr "Échec de {} : {}"
+
+#: rust
+msgid "cancelled in the permission prompt"
+msgstr "annulé dans la fenêtre d’autorisation"

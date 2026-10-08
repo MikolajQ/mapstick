@@ -42,6 +42,10 @@ pub enum Error {
     /// więcej niż cokolwiek, co moglibyśmy wymyślić w zastępstwie.
     #[error("Usługa dysków odmówiła: {0}")]
     Service(String),
+    /// Użytkownik zamknął systemowe okno z pytaniem o uprawnienia (UAC,
+    /// polkit). Osobno od `Service`, bo to nie błąd, tylko decyzja.
+    #[error("Anulowano w oknie uprawnień")]
+    Cancelled,
     #[error("Ta platforma nie jest jeszcze obsługiwana")]
     Unsupported,
 }

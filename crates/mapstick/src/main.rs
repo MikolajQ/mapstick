@@ -265,6 +265,7 @@ fn describe(error: &(dyn std::error::Error + 'static)) -> String {
             }
             M::Backend(source) => tr!("Could not talk to the disk service: {}", source),
             M::Service(reason) => tr!("The disk service refused: {}", reason),
+            M::Cancelled => tr!("cancelled in the permission prompt"),
             M::Unsupported => tr!("This system is not supported yet"),
         };
     }

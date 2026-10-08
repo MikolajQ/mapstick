@@ -52,6 +52,12 @@ trait Filesystem {
 /// nikomu nic nie mówi, ale treść — owszem.
 fn service<E: Into<zbus::Error>>(e: E) -> Error {
     match e.into() {
+        // Zamknięte okno polkit — decyzja użytkownika, nie awaria usługi.
+        zbus::Error::MethodError(name, _, _)
+            if name.as_str().ends_with(".Error.NotAuthorizedDismissed") =>
+        {
+            Error::Cancelled
+        }
         zbus::Error::MethodError(_, Some(message), _) => Error::Service(message),
         other => backend(other),
     }

@@ -619,3 +619,7 @@ msgstr "{} nimmt keine Eingabe an"
 #: rust
 msgid "{} failed: {}"
 msgstr "{} fehlgeschlagen: {}"
+
+#: rust
+msgid "cancelled in the permission prompt"
+msgstr "im Berechtigungsdialog abgebrochen"

@@ -282,7 +282,8 @@ fn format_elevated(letter: &str, label: &str, id: &str) -> Result<()> {
         .collect::<Vec<_>>()
         .join(",");
 
-    // Kod wyjścia 3 = odmowa ze względów bezpieczeństwa; treść błędu ląduje
+    // Kod wyjścia 3 = odmowa ze względów bezpieczeństwa (4 = anulowane UAC,
+    // ustawia go skrypt zewnętrzny); treść błędu ląduje
     // w pliku, bo podwyższony proces nie ma jak oddać nam swojego stderr.
     let inner = format!(
         r#"
@@ -303,11 +304,34 @@ try {{
         report = report.display()
     );
 
-    // Zewnętrzny PowerShell tylko podnosi uprawnienia i oddaje kod wyjścia;
-    // anulowane okno UAC kończy go wyjątkiem z komunikatem systemu.
+    // Zewnętrzny PowerShell tylko podnosi uprawnienia i oddaje kod wyjścia.
+    //
+    // Process.Start z `runas` zamiast Start-Process, bo ten w PowerShellu 5.1
+    // przepakowuje błąd w InvalidOperationException i gubi Win32Exception
+    // z kodem — anulowane UAC (ERROR_CANCELLED, 1223) dawało się rozpoznać
+    // już tylko po przetłumaczonym tekście. Wcześniej, bez `Stop`, gorzej:
+    // pusty `$p` i `exit $null` = `exit 0`, anulowanie wyglądało jak udane
+    // formatowanie. Oba sprawdzone na żywo.
     let outer = format!(
-        "$p = Start-Process powershell.exe -Verb RunAs -Wait -PassThru -WindowStyle Hidden \
-         -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','{}'\n\
+        "$ErrorActionPreference = 'Stop'\n\
+         $i = New-Object System.Diagnostics.ProcessStartInfo 'powershell.exe'\n\
+         $i.Verb = 'runas'\n\
+         $i.UseShellExecute = $true\n\
+         $i.WindowStyle = 'Hidden'\n\
+         $i.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {}'\n\
+         try {{\n\
+             $p = [System.Diagnostics.Process]::Start($i)\n\
+         }} catch {{\n\
+             $e = $_.Exception\n\
+             while ($e) {{\n\
+                 if ($e -is [ComponentModel.Win32Exception] -and $e.NativeErrorCode -eq 1223) {{ exit 4 }}\n\
+                 $e = $e.InnerException\n\
+             }}\n\
+             [Console]::Error.WriteLine($_.Exception.Message)\n\
+             exit 2\n\
+         }}\n\
+         if ($null -eq $p) {{ exit 2 }}\n\
+         $p.WaitForExit()\n\
          exit $p.ExitCode",
         encode(&inner)
     );
@@ -319,6 +343,8 @@ try {{
     match output.status.code() {
         Some(0) => Ok(()),
         Some(3) => Err(Error::SystemDisk(id.to_owned())),
+        // ERROR_CANCELLED z okna UAC.
+        Some(4) => Err(Error::Cancelled),
         _ => {
             let reason = if message.trim().is_empty() {
                 String::from_utf8_lossy(&output.stderr).trim().to_owned()

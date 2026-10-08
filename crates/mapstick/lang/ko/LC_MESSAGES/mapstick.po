@@ -619,3 +619,7 @@ msgstr "{}이(가) 입력을 받지 않습니다"
 #: rust
 msgid "{} failed: {}"
 msgstr "{} 실패: {}"
+
+#: rust
+msgid "cancelled in the permission prompt"
+msgstr "권한 확인 창에서 취소됨"
