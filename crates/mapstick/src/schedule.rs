@@ -317,67 +317,117 @@ mod linux {
 #[cfg(target_os = "windows")]
 pub use windows::{current, install, remove};
 
-// UWAGA: pisane i przeglądane bez dostępu do Windows — nieprzetestowane na
-// żywym systemie. Sama komenda `schtasks` jest stabilna od dawna, ale przed
-// wydaniem warto to sprawdzić na prawdziwej maszynie.
+/// Flaga `CreateProcess`, bez której każde wywołanie narzędzia konsolowego
+/// (`schtasks`, `reg`) z okna aplikacji błyska czarnym oknem konsoli.
+#[cfg(target_os = "windows")]
+pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 #[cfg(target_os = "windows")]
 mod windows {
     use super::*;
+    use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
 
     /// Nazwa zadania w Harmonogramie zadań.
     const TASK_NAME: &str = "MapStick sprawdzanie";
-
-    /// Godzina uruchomienia, wybrana raz przy zakładaniu zadania — to nasz
-    /// odpowiednik `RandomizedDelaySec` z systemd: różni użytkownicy trafiają
-    /// w różne godziny, ale bez zmiennej `OnCalendar` po stronie schtasks
-    /// samo zadanie nie losuje ponownie przy każdym uruchomieniu.
-    fn random_hour() -> u32 {
-        use std::time::{SystemTime, UNIX_EPOCH};
-
-        let seed = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.subsec_nanos())
-            .unwrap_or(0);
-
-        3 + (seed % 4) // 03:00–06:00
-    }
 
     fn schtasks(args: &[&str]) -> Result<std::process::Output> {
         Command::new("schtasks")
             .args(args)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
+            .creation_flags(CREATE_NO_WINDOW)
             .output()
             .context("Nie udało się uruchomić schtasks")
     }
 
-    pub fn install(_interval: Interval) -> Result<Kind> {
-        let _ = remove();
+    fn xml_escape(text: &str) -> String {
+        text.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+    }
 
+    /// Definicja zadania — odpowiednik timera systemd z Linuksa.
+    ///
+    /// Przez XML, bo samo `schtasks /Create /SC DAILY` nie ustawi tego, co
+    /// tu najważniejsze, a jego domyślne wartości sprawdzone na żywym
+    /// Windows 11 psują sprawę:
+    /// - bez `StartWhenAvailable` przegapione budzenie przepada, więc
+    ///   komputer wyłączany na noc nie sprawdzałby nigdy (`Persistent=true`),
+    /// - `DisallowStartIfOnBatteries` jest domyślnie włączone — laptop na
+    ///   baterii też nie sprawdzałby nigdy,
+    /// - `RandomDelay` rozkłada pytania do serwisu na godzinę
+    ///   (`RandomizedDelaySec=1h`), zamiast losować godzinę raz na zawsze.
+    ///
+    /// Brak `UserId` w `Principal` znaczy: bieżący użytkownik, tylko gdy jest
+    /// zalogowany — powiadomienie i tak nie ma komu się pokazać inaczej.
+    fn task_xml(exe: &str) -> String {
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>MapStick — sprawdzanie nowych wydań map</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <CalendarTrigger>
+      <StartBoundary>2026-01-01T00:00:00</StartBoundary>
+      <RandomDelay>PT1H</RandomDelay>
+      <ScheduleByDay>
+        <DaysInterval>1</DaysInterval>
+      </ScheduleByDay>
+    </CalendarTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
+    <Enabled>true</Enabled>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>"{}"</Command>
+      <Arguments>--sprawdz</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+"#,
+            xml_escape(exe)
+        )
+    }
+
+    pub fn install(_interval: Interval) -> Result<Kind> {
         let exe = binary()?;
-        let exe = exe.to_string_lossy();
-        let time = format!("{:02}:00", random_hour());
-        // Cudzysłów wokół ścieżki: nazwy użytkowników bywają ze spacją
-        // („C:\Users\Jan Kowalski\...”), a schtasks tnie po pierwszej.
-        let action = format!("\"{exe}\" --sprawdz");
+        let xml = task_xml(&exe.to_string_lossy());
+
+        // schtasks czyta XML z pliku; deklaracja mówi UTF-16, więc tak
+        // zapisujemy — z BOM-em, jak eksportuje sam Harmonogram.
+        let path = std::env::temp_dir().join("mapstick-zadanie.xml");
+        let bytes: Vec<u8> = [0xFF, 0xFE]
+            .into_iter()
+            .chain(xml.encode_utf16().flat_map(u16::to_le_bytes))
+            .collect();
+        std::fs::write(&path, bytes)
+            .with_context(|| format!("Nie udało się zapisać {}", path.display()))?;
 
         let output = schtasks(&[
             "/Create",
             "/TN",
             TASK_NAME,
-            "/TR",
-            &action,
-            "/SC",
-            "DAILY",
-            "/ST",
-            &time,
-            // Uprawnienia zwykłego użytkownika — to sprawdzenie ma prawo
-            // czytać jego plik ulubionych, niczego więcej.
-            "/RL",
-            "LIMITED",
+            "/XML",
+            &path.to_string_lossy(),
             "/F",
-        ])?;
+        ]);
+        let _ = std::fs::remove_file(&path);
+        let output = output?;
 
         if !output.status.success() {
             return Err(anyhow!(
@@ -400,6 +450,17 @@ mod windows {
             .ok()
             .filter(|o| o.status.success())
             .map(|_| Kind::TaskScheduler)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn the_path_is_escaped_and_quoted() {
+            let xml = task_xml(r"C:\Users\Jan & Ola\mapstick.exe");
+            assert!(xml.contains(r#"<Command>"C:\Users\Jan &amp; Ola\mapstick.exe"</Command>"#));
+        }
     }
 }
 

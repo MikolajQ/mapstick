@@ -329,7 +329,52 @@ fn show(mut notification: notify_rust::Notification, news: &News) -> Result<()> 
     Ok(())
 }
 
-#[cfg(not(target_os = "linux"))]
+/// Identyfikator aplikacji (AppUserModelID), pod którym Windows pokazuje
+/// powiadomienia. Bez niego notify-rust podpisuje je „Windows PowerShell”.
+#[cfg(target_os = "windows")]
+const APP_ID: &str = "MapStick";
+
+/// Windows przyjmuje powiadomienie od aplikacji spoza Sklepu tylko z
+/// identyfikatorem, który zna — wpis w rejestrze użytkownika wystarczy
+/// i nie wymaga instalatora ani uprawnień administratora. Powtarzane przy
+/// każdym powiadomieniu, bo kosztuje ułamek sekundy, a przenosi się razem
+/// z aplikacją.
+#[cfg(target_os = "windows")]
+fn register_app_id() {
+    use std::os::windows::process::CommandExt;
+
+    let key = format!(r"HKCU\Software\Classes\AppUserModelId\{APP_ID}");
+    let status = std::process::Command::new("reg")
+        .args([
+            "add",
+            &key,
+            "/v",
+            "DisplayName",
+            "/t",
+            "REG_SZ",
+            "/d",
+            "MapStick",
+            "/f",
+        ])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .creation_flags(crate::schedule::CREATE_NO_WINDOW)
+        .status();
+
+    if !matches!(status, Ok(s) if s.success()) {
+        tracing::warn!("Nie udało się zarejestrować {APP_ID} dla powiadomień: {status:?}");
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn show(mut notification: notify_rust::Notification, _news: &News) -> Result<()> {
+    register_app_id();
+    notification.app_id(APP_ID);
+    notification.show()?;
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 fn show(notification: notify_rust::Notification, _news: &News) -> Result<()> {
     notification.show()?;
     Ok(())

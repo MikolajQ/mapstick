@@ -3,6 +3,11 @@
 
 //! MapStick — graficzna nakładka na nudl.
 
+// Wydanie dla Windows bez okna konsoli: inaczej czarne okno stałoby obok
+// aplikacji, a codzienne sprawdzenie z Harmonogramu błyskałoby nim co rano.
+// Wersja debug je zachowuje — tam log w konsoli to zaleta.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
