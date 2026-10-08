@@ -491,3 +491,11 @@ msgstr "복사하는 중…"
 #: rust
 msgid "Unnamed medium"
 msgstr "이름 없는 미디어"
+
+#: rust
+msgid "a Task Scheduler task"
+msgstr "작업 스케줄러 작업"
+
+#: rust
+msgid "a launchd agent"
+msgstr "launchd 에이전트"

@@ -186,4 +186,96 @@ mod tests {
         }
         assert_eq!(match_language("tlh"), None);
     }
+
+    /// Napisy z `tr!("…")` i `i18n::tr("…")` w źródłach tej skrzynki.
+    fn messages_in_sources() -> Vec<String> {
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut found = Vec::new();
+
+        for entry in std::fs::read_dir(src).unwrap() {
+            let path = entry.unwrap().path();
+            // Ten plik tylko opisuje `tr!` — w dokumentacji i w tym teście.
+            if path.extension().is_none_or(|e| e != "rs") || path.ends_with("i18n.rs") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+
+            for call in ["tr!(", "i18n::tr("] {
+                for (start, _) in text.match_indices(call) {
+                    let rest = text[start + call.len()..].trim_start();
+                    if let Some(literal) = rest.strip_prefix('"') {
+                        found.push(unescape(literal));
+                    }
+                }
+            }
+        }
+
+        found
+    }
+
+    /// Treść literału napisu Rusta aż do zamykającego cudzysłowu — tyle
+    /// sekwencji ucieczki, ile używają nasze napisy.
+    fn unescape(literal: &str) -> String {
+        let mut out = String::new();
+        let mut chars = literal.chars();
+
+        while let Some(c) = chars.next() {
+            match c {
+                '"' => break,
+                '\\' => match chars.next() {
+                    Some('n') => out.push('\n'),
+                    Some('t') => out.push('\t'),
+                    // Kontynuacja wiersza: znika razem z wcięciem następnego.
+                    Some('\n') => {
+                        let rest: String = chars.collect();
+                        return out + &unescape(rest.trim_start());
+                    }
+                    Some(other) => out.push(other),
+                    None => break,
+                },
+                _ => out.push(c),
+            }
+        }
+
+        out
+    }
+
+    /// Każdy napis budowany w Rustcie ma tłumaczenie w każdym języku. Bez
+    /// tego zapomniany `tr!` albo nowa etykieta wychodzą dopiero na żywym
+    /// systemie — tak trafiły się trzy, gdy MapStick pierwszy raz ruszył
+    /// na Windows.
+    #[test]
+    fn every_message_is_translated_in_every_language() {
+        use crate::schedule::Kind;
+        use mapstick_store::Interval;
+
+        let mut messages = messages_in_sources();
+        messages.extend(
+            [
+                Kind::Systemd,
+                Kind::Cron,
+                Kind::Autostart,
+                Kind::TaskScheduler,
+                Kind::Launchd,
+            ]
+            .map(|k| k.label().to_owned()),
+        );
+        messages.extend(Interval::ALL.iter().map(|i| i.label().to_owned()));
+        messages.extend(crate::REGIONS.iter().map(|(_, label)| (*label).to_owned()));
+
+        assert!(messages.len() > 50, "parser znalazł podejrzanie mało: {}", messages.len());
+
+        let mut missing = Vec::new();
+        for (language, table) in TRANSLATIONS {
+            for message in &messages {
+                if !table.iter().any(|(id, _)| id == message) {
+                    missing.push(format!("{language}: {message:?}"));
+                }
+            }
+        }
+        missing.sort();
+        missing.dedup();
+
+        assert!(missing.is_empty(), "brak tłumaczeń:\n{}", missing.join("\n"));
+    }
 }

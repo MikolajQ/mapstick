@@ -491,3 +491,11 @@ msgstr "Copiando…"
 #: rust
 msgid "Unnamed medium"
 msgstr "Soporte sin nombre"
+
+#: rust
+msgid "a Task Scheduler task"
+msgstr "una tarea del Programador de tareas"
+
+#: rust
+msgid "a launchd agent"
+msgstr "un agente de launchd"

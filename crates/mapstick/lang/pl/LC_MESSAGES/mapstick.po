@@ -629,3 +629,11 @@ msgstr "Kopiowanie…"
 #: rust
 msgid "Unnamed medium"
 msgstr "Nośnik bez nazwy"
+
+#: rust
+msgid "a Task Scheduler task"
+msgstr "zadanie Harmonogramu zadań"
+
+#: rust
+msgid "a launchd agent"
+msgstr "agent launchd"

@@ -429,10 +429,10 @@ msgid "The downloaded archives will be unpacked into the chosen folder ({} neede
 msgstr "Die heruntergeladenen Archive werden in den gewählten Ordner entpackt ({} benötigt). Schließen Sie nach Abschluss des Downloads das Wechselgerät an und klicken Sie auf „Aktualisieren“, um die Daten darauf zu kopieren oder zu verschieben."
 
 msgid "a systemd timer"
-msgstr "einen systemd-Timer"
+msgstr "einem systemd-Timer"
 
 msgid "a cron entry"
-msgstr "einen Cron-Eintrag"
+msgstr "einem Cron-Eintrag"
 
 msgid "startup at login"
 msgstr "Start bei der Anmeldung"
@@ -491,3 +491,11 @@ msgstr "Wird kopiert…"
 #: rust
 msgid "Unnamed medium"
 msgstr "Unbenannter Datenträger"
+
+#: rust
+msgid "a Task Scheduler task"
+msgstr "einer Aufgabe der Aufgabenplanung"
+
+#: rust
+msgid "a launchd agent"
+msgstr "einem launchd-Agenten"

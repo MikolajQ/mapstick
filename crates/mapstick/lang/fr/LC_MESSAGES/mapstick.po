@@ -491,3 +491,11 @@ msgstr "Copie en cours…"
 #: rust
 msgid "Unnamed medium"
 msgstr "Support sans nom"
+
+#: rust
+msgid "a Task Scheduler task"
+msgstr "une tâche du Planificateur de tâches"
+
+#: rust
+msgid "a launchd agent"
+msgstr "un agent launchd"
