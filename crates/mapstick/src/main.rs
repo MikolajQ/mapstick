@@ -224,6 +224,17 @@ fn remove_partial_archives(directory: &Path) -> u64 {
     freed
 }
 
+/// Nazwa nośnika do pokazania. Napęd bez producenta i modelu przychodzi
+/// z pustą nazwą, a podpis zastępczy tłumaczymy tutaj — `mapstick-media`
+/// nie ma tłumaczeń.
+fn medium_label(medium: &Medium) -> String {
+    if medium.label.is_empty() {
+        tr!("Unnamed medium")
+    } else {
+        medium.label.clone()
+    }
+}
+
 /// Ile bajtów poleci przez sieć i ile zajmie na nośniku.
 ///
 /// To dwie różne liczby: pliki przychodzą spakowane, a na nośnik trafiają
@@ -465,8 +476,7 @@ impl Worker {
         self.with_ui(move |ui| {
             ui.set_favourites(ModelRc::new(VecModel::from(rows)));
             ui.set_favourites_note(if empty {
-                "Wybierz model i naciśnij „Dodaj do ulubionych”, żeby widzieć tu jego wersję \
-                 przy każdym uruchomieniu."
+                tr!("Pick a model and press “Add to favourites” to see its version here every time you start.")
                     .into()
             } else {
                 "".into()
@@ -926,7 +936,7 @@ impl Worker {
         self.filter.clear();
         self.push_rows();
 
-        self.set_status(format!("Znaleziono {count} modeli."), false);
+        self.set_status(tr!("Models found: {}.", count), false);
 
         // Sama zmiana marki albo regionu też jest wyborem. Bez tego zamknięcie
         // okna przed kliknięciem w model wracałoby przy starcie do auta
@@ -1570,7 +1580,7 @@ impl Worker {
 
                 MediumRow {
                     id: m.id.as_str().into(),
-                    label: m.label.as_str().into(),
+                    label: medium_label(m).into(),
                     details: details.into(),
                     status: status.as_str().into(),
                     usable,
@@ -1722,7 +1732,7 @@ impl Worker {
         // ten nośnik: nazwę napędu, pojemność i ścieżkę urządzenia.
         let target = format!(
             "{}\n{}  ·  {}{}",
-            medium.label,
+            medium_label(medium),
             medium.id,
             format_size(medium.total_bytes),
             medium
@@ -1904,7 +1914,7 @@ impl Worker {
             ui.set_downloading(true);
             ui.set_paused(false);
             ui.set_progress(0.0);
-            ui.set_progress_text("Rozpoczynanie…".into());
+            ui.set_progress_text(tr!("Starting…").into());
         });
 
         self.download = Some(tokio::spawn(async move {
@@ -2131,7 +2141,7 @@ impl Worker {
         self.with_ui(|ui| {
             ui.set_copying(true);
             ui.set_progress(0.0);
-            ui.set_progress_text("Kopiowanie…".into());
+            ui.set_progress_text(tr!("Copying…").into());
         });
 
         self.download = Some(tokio::spawn(async move {

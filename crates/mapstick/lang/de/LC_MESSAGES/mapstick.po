@@ -471,3 +471,23 @@ msgstr "Anzeigen"
 
 msgid "The car already has it"
 msgstr "Das Auto hat es bereits"
+
+#: rust
+msgid "Pick a model and press “Add to favourites” to see its version here every time you start."
+msgstr "Wählen Sie ein Modell und drücken Sie „Zu Favoriten hinzufügen“, um hier bei jedem Start seine Version zu sehen."
+
+#: rust
+msgid "Models found: {}."
+msgstr "Gefundene Modelle: {}."
+
+#: rust
+msgid "Starting…"
+msgstr "Wird gestartet…"
+
+#: rust
+msgid "Copying…"
+msgstr "Wird kopiert…"
+
+#: rust
+msgid "Unnamed medium"
+msgstr "Unbenannter Datenträger"

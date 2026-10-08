@@ -60,6 +60,7 @@ pub struct Medium {
     /// Identyfikator całego napędu, do którego należy wolumen.
     pub drive_id: String,
     /// Nazwa czytelna dla człowieka, np. „SanDisk Ultra”.
+    /// Pusta, gdy napęd nie podaje ani producenta, ani modelu.
     pub label: String,
     pub mount_point: Option<PathBuf>,
     pub filesystem: Option<String>,

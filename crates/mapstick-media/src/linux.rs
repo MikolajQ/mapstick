@@ -97,7 +97,8 @@ fn drive_label(props: &Props) -> String {
     let model = prop::<String>(props, "Model").unwrap_or_default();
 
     match (vendor.trim(), model.trim()) {
-        ("", "") => "Nośnik bez nazwy".to_owned(),
+        // Podpis zastępczy dokłada interfejs, w swoim języku.
+        ("", "") => String::new(),
         ("", m) => m.to_owned(),
         (v, "") => v.to_owned(),
         (v, m) => format!("{v} {m}"),
