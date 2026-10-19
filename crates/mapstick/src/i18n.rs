@@ -198,7 +198,9 @@ mod tests {
             if path.extension().is_none_or(|e| e != "rs") || path.ends_with("i18n.rs") {
                 continue;
             }
-            let text = std::fs::read_to_string(&path).unwrap();
+            // rustc czyta CRLF (checkout na Windows) jak LF, więc parser też —
+            // inaczej kontynuacja wiersza zostawia w napisie `\r`.
+            let text = std::fs::read_to_string(&path).unwrap().replace("\r\n", "\n");
 
             for call in ["tr!(", "i18n::tr("] {
                 for (start, _) in text.match_indices(call) {
