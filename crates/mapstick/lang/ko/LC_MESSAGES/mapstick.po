@@ -296,8 +296,8 @@ msgstr "저장 장치에 이미 현재 버전이 있습니다"
 msgid "not enough space"
 msgstr "공간 부족"
 
-msgid "The removable medium holds a different firmware version; it will be removed once the current one is downloaded"
-msgstr "이동식 저장 장치에 다른 버전의 펌웨어가 있습니다. 현재 버전을 다운로드하면 삭제됩니다"
+msgid "another version is on the medium; it will be removed once the current one is downloaded"
+msgstr "저장 장치에 다른 버전이 있습니다. 현재 버전을 다운로드하면 삭제됩니다"
 
 msgid "ready"
 msgstr "준비됨"

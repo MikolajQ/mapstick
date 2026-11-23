@@ -1238,6 +1238,11 @@ impl Worker {
 
         self.with_ui(move |ui| ui.set_target_has_current(current));
         self.push_copy_state();
+
+        // Opis miejsca zależy od tego, czy celem jest nośnik. Liczony tylko
+        // przy wejściu w widok nośników zostawał przy „podłącz nośnik”, choć
+        // chwilę później jedyny podłączony nośnik sam stawał się celem.
+        self.push_space_note();
     }
 
     /// Jedyny podłączony nośnik przejmuje rolę celu, dopóki celu nie ma.
@@ -1518,7 +1523,6 @@ impl Worker {
         );
 
         self.push_target_state();
-        self.push_space_note();
 
         if let Err(e) = self.start_download() {
             self.set_status(e.to_string(), true);
@@ -1685,8 +1689,8 @@ impl Worker {
                     // nie poprawności.
                     _ if other_version => (
                         tr!(
-                            "The removable medium holds a different firmware version; it \
-                             will be removed once the current one is downloaded"
+                            "another version is on the medium; it will be removed once \
+                             the current one is downloaded"
                         ),
                         true,
                     ),
@@ -3010,7 +3014,6 @@ impl Worker {
                         ui.set_target_summary(summary.into());
                         ui.set_page(1);
                     });
-                    self.push_space_note();
                     self.push_target_state();
                     self.push_leftovers();
                     self.refresh_media().await;

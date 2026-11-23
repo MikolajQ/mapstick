@@ -296,8 +296,8 @@ msgstr "der Datenträger enthält bereits die aktuelle Version"
 msgid "not enough space"
 msgstr "nicht genug Platz"
 
-msgid "The removable medium holds a different firmware version; it will be removed once the current one is downloaded"
-msgstr "Der Wechseldatenträger enthält eine andere Firmware-Version; sie wird entfernt, sobald die aktuelle heruntergeladen ist"
+msgid "another version is on the medium; it will be removed once the current one is downloaded"
+msgstr "auf dem Datenträger liegt eine andere Version; sie wird entfernt, sobald die aktuelle heruntergeladen ist"
 
 msgid "ready"
 msgstr "bereit"

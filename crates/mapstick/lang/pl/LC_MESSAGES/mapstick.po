@@ -379,8 +379,8 @@ msgid "not enough space"
 msgstr "za mało miejsca"
 
 #: rust
-msgid "The removable medium holds a different firmware version; it will be removed once the current one is downloaded"
-msgstr "Na nośniku wymiennym znajduje się inna wersja oprogramowania i zostanie usunięta po pobraniu aktualnej"
+msgid "another version is on the medium; it will be removed once the current one is downloaded"
+msgstr "na nośniku jest inna wersja; zostanie usunięta po pobraniu bieżącej"
 
 #: rust
 msgid "ready"
