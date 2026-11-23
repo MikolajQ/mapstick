@@ -3023,8 +3023,10 @@ fn main() -> Result<()> {
 
     // Sprawdzenie z harmonogramu: bez okna, bez pętli zdarzeń, bez ekranu.
     // Kończy się samo, więc między sprawdzeniami nie zostaje ani jeden proces.
-    if args.iter().any(|a| a == "--sprawdz") {
-        let force = args.iter().any(|a| a == "--teraz");
+    // Polskie nazwy flag zostają jako zamienniki: wołają je harmonogramy
+    // założone przed wersją 0.1, dopóki okno nie założy ich na nowo.
+    if args.iter().any(|a| a == "--check" || a == "--sprawdz") {
+        let force = args.iter().any(|a| a == "--now" || a == "--teraz");
 
         return watch::run(force);
     }

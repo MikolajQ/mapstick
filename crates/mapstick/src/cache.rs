@@ -33,7 +33,14 @@ pub fn base() -> PathBuf {
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
         .unwrap_or_else(std::env::temp_dir);
 
-    base.join("mapstick").join("archiwa")
+    let directory = base.join("mapstick");
+    let path = directory.join("archives");
+
+    // Do wersji 0.1 katalog nazywał się po polsku. Leżą w nim przerwane
+    // pobrania — szkoda je zgubić przy zmianie nazwy.
+    mapstick_store::adopt_legacy(&directory.join("archiwa"), &path);
+
+    path
 }
 
 /// Katalog roboczy jednego pobrania.

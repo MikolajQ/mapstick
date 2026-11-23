@@ -93,7 +93,9 @@ fn combo_key(brand: &str, region: &str) -> String {
 
 impl Table {
     pub fn path() -> std::path::PathBuf {
-        cache_base().join("odnosniki.json")
+        let path = cache_base().join("links.json");
+        mapstick_store::adopt_legacy(&cache_base().join("odnosniki.json"), &path);
+        path
     }
 
     pub fn load() -> Self {

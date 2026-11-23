@@ -3,7 +3,7 @@
 
 //! Sprawdzanie nowych wydań bez otwierania okna.
 //!
-//! Uruchamiane z harmonogramu systemu (`mapstick --sprawdz`), robi jedną
+//! Uruchamiane z harmonogramu systemu (`mapstick --check`), robi jedną
 //! rzecz i kończy się: pyta o modele oznaczone jako pilnowane, zapisuje wynik
 //! i pokazuje powiadomienie, jeśli jest o czym mówić. Między sprawdzeniami nie
 //! zostaje w pamięci nic — to najlżejsza usługa, jaka istnieje.

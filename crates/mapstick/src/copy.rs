@@ -20,7 +20,11 @@ use anyhow::{Context, Result};
 use crate::tr;
 
 /// Katalog przejściowy, zakładany na nośniku na czas kopiowania.
-pub const STAGING: &str = ".mapstick-niegotowe";
+pub const STAGING: &str = ".mapstick-incomplete";
+
+/// Ta sama rola pod nazwą sprzed wersji 0.1 — sprzątana jak każda
+/// pozostałość po przerwanym kopiowaniu.
+const LEGACY_STAGING: &str = ".mapstick-niegotowe";
 
 /// Ile bajtów naraz. Duży bufor, bo to strumień na kość pamięci, nie edytor.
 const CHUNK: usize = 1 << 20;
@@ -44,9 +48,11 @@ pub fn stage_and_place(
 
     // Pozostałość po wcześniejszym przerwanym kopiowaniu jest bezużyteczna:
     // nie wiadomo, które pliki są całe.
-    if staging.exists() {
-        fs::remove_dir_all(&staging)
-            .with_context(|| tr!("Could not remove {}", staging.display()))?;
+    for leftover in [staging.clone(), target.join(LEGACY_STAGING)] {
+        if leftover.exists() {
+            fs::remove_dir_all(&leftover)
+                .with_context(|| tr!("Could not remove {}", leftover.display()))?;
+        }
     }
     fs::create_dir_all(&staging)
         .with_context(|| tr!("Could not create {}", staging.display()))?;
@@ -271,6 +277,20 @@ mod tests {
 
         assert!(target.join("NE1.ver").exists());
         assert!(!target.join("smiec").exists());
+    }
+
+    /// Pozostałość pod nazwą sprzed wersji 0.1 też znika z pendrive'a.
+    #[test]
+    fn the_legacy_staging_directory_is_cleared_too() {
+        let dir = tempfile::tempdir().unwrap();
+        let (source, target) = (dir.path().join("dysk"), dir.path().join("pen"));
+        sample(&source);
+        fs::create_dir_all(target.join(LEGACY_STAGING).join("smiec")).unwrap();
+
+        stage_and_place(&source, &target, &AtomicBool::new(false), &mut |_| {}).unwrap();
+
+        assert!(target.join("NE1.ver").exists());
+        assert!(!target.join(LEGACY_STAGING).exists());
     }
 
     /// Nośnik z poprzednim wydaniem: stare pliki ustępują nowym.

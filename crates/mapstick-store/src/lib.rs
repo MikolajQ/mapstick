@@ -413,7 +413,29 @@ pub fn default_path() -> PathBuf {
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
         .unwrap_or_else(std::env::temp_dir);
 
-    base.join("mapstick").join("ulubione.json")
+    let directory = base.join("mapstick");
+    let path = directory.join("favourites.json");
+
+    // Do wersji 0.1 plik nazywał się po polsku.
+    adopt_legacy(&directory.join("ulubione.json"), &path);
+    let _ = std::fs::remove_file(directory.join("ulubione.lock"));
+
+    path
+}
+
+/// Przejmuje plik albo katalog spod starej nazwy, jeśli pod nową jeszcze nic
+/// nie ma. Zmiana nazwy jest atomowa, więc dwa procesy naraz (okno i
+/// sprawdzanie w tle) nie zrobią sobie krzywdy — drugi po prostu nie zastanie
+/// już starej nazwy.
+pub fn adopt_legacy(old: &Path, new: &Path) {
+    if new.exists() || !old.exists() {
+        return;
+    }
+
+    if let Err(e) = std::fs::rename(old, new) {
+        // Pierwszeństwo ma działający program: najwyżej zacznie od zera.
+        eprintln!("MapStick: nie przeniosę {} do {}: {e}", old.display(), new.display());
+    }
 }
 
 #[cfg(test)]
@@ -615,6 +637,22 @@ mod tests {
         f.downloaded_version = Some("A".to_owned());
 
         assert_eq!(f.has_update(), Some(true));
+    }
+
+    /// Stary plik przechodzi pod nową nazwę, ale nigdy nie nadpisuje nowego.
+    #[test]
+    fn a_legacy_file_is_adopted_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let (old, new) = (dir.path().join("ulubione.json"), dir.path().join("favourites.json"));
+
+        std::fs::write(&old, "stary").unwrap();
+        adopt_legacy(&old, &new);
+        assert_eq!(std::fs::read_to_string(&new).unwrap(), "stary");
+        assert!(!old.exists());
+
+        std::fs::write(&old, "jeszcze starszy").unwrap();
+        adopt_legacy(&old, &new);
+        assert_eq!(std::fs::read_to_string(&new).unwrap(), "stary");
     }
 
     /// Plik sprzed meldunków dostaje meldunek co tydzień — a wyłączony

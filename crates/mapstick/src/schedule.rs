@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mikołaj
 // SPDX-License-Identifier: GPL-3.0-only
 
-//! Zakładanie harmonogramu, który codziennie woła `mapstick --sprawdz`.
+//! Zakładanie harmonogramu, który codziennie woła `mapstick --check`.
 //!
 //! Codziennie, niezależnie od tego, jak często użytkownik chce pytać
 //! producenta: o tym odstępie i o codziennych przypomnieniach decyduje samo
@@ -68,7 +68,12 @@ impl Kind {
 /// linuksowa trójka dróg (systemd/cron/autostart) — Windows i macOS mają
 /// własne, samodzielne nazwy niżej.
 #[cfg(target_os = "linux")]
-const NAME: &str = "mapstick-sprawdzanie";
+const NAME: &str = "mapstick-check";
+
+/// Nazwa sprzed wersji 0.1. Jej pliki i wpisy sprzątamy przy każdym
+/// zakładaniu, żeby po aktualizacji nie budziły nas dwa wyzwalacze naraz.
+#[cfg(target_os = "linux")]
+const LEGACY_NAME: &str = "mapstick-sprawdzanie";
 
 /// Ścieżka do naszej binarki. Harmonogram wymaga bezwzględnej — nie wie nic
 /// o katalogu, z którego ktoś uruchomił aplikację.
@@ -97,9 +102,11 @@ mod linux {
     }
 
     fn autostart_file() -> PathBuf {
-        config_home()
-            .join("autostart")
-            .join(format!("{NAME}.desktop"))
+        autostart_named(NAME)
+    }
+
+    fn autostart_named(name: &str) -> PathBuf {
+        config_home().join("autostart").join(format!("{name}.desktop"))
     }
 
     /// Czy w tej sesji w ogóle jest do kogo mówić.
@@ -151,7 +158,7 @@ mod linux {
 
     /// Jednostka, którą systemd uruchamia, gdy samo sprawdzanie zawiedzie.
     fn failure_unit() -> String {
-        format!("{NAME}-awaria.service")
+        format!("{NAME}-failed.service")
     }
 
     /// Treść wszystkich trzech jednostek, z nazwami plików.
@@ -172,7 +179,7 @@ mod linux {
              \n\
              [Service]\n\
              Type=oneshot\n\
-             ExecStart={exe} --sprawdz\n\
+             ExecStart={exe} --check\n\
              # Each request has its own 90 s limit; this is only the safety net.\n\
              TimeoutStartSec=15min\n\
              # A window opened from the notification belongs to the user now,\n\
@@ -275,7 +282,7 @@ mod linux {
         // apostrofy i `\%`.
         let exe = binary()?.to_string_lossy().replace('\'', "'\\''").replace('%', "\\%");
 
-        Ok(format!("@daily '{exe}' --sprawdz # {NAME}"))
+        Ok(format!("@daily '{exe}' --check # {NAME}"))
     }
 
     fn crontab_read() -> Option<String> {
@@ -316,7 +323,7 @@ mod linux {
 
         let mut text: String = current
             .lines()
-            .filter(|l| !l.contains(NAME))
+            .filter(|l| !l.contains(NAME) && !l.contains(LEGACY_NAME))
             .map(|l| format!("{l}\n"))
             .collect();
 
@@ -349,9 +356,9 @@ mod linux {
         let desktop = format!(
             "[Desktop Entry]\n\
              Type=Application\n\
-             Name=MapStick — sprawdzanie aktualizacji map\n\
-             Comment=Pyta producenta {}; o odstępie i przypomnieniach decyduje sama aplikacja\n\
-             Exec={} --sprawdz\n\
+             Name=MapStick: check for new map releases\n\
+             Comment=Asks the maker {}; MapStick itself decides when to remind\n\
+             Exec={} --check\n\
              Terminal=false\n\
              NoDisplay=true\n\
              X-GNOME-Autostart-enabled=true\n",
@@ -393,21 +400,36 @@ mod linux {
     /// Usuwa wszystko, co mogliśmy założyć — także drogami, których dziś już
     /// nie wybralibyśmy.
     pub fn remove() -> Result<()> {
-        if systemd_available() {
-            let _ = systemctl(&["disable", "--now", &format!("{NAME}.timer")]);
+        let systemd = systemd_available();
+        let directory = unit_dir();
+
+        for name in [NAME, LEGACY_NAME] {
+            if systemd && directory.join(format!("{name}.timer")).exists() {
+                let _ = systemctl(&["disable", "--now", &format!("{name}.timer")]);
+            }
+
+            let _ = std::fs::remove_file(directory.join(format!("{name}.timer")));
+            let _ = std::fs::remove_file(directory.join(format!("{name}.service")));
+            let _ = std::fs::remove_file(autostart_named(name));
+        }
+        let _ = std::fs::remove_file(directory.join(failure_unit()));
+        let _ = std::fs::remove_file(directory.join(format!("{LEGACY_NAME}-awaria.service")));
+
+        // Znacznik ostatniego uruchomienia (`Persistent=true`), który systemd
+        // zostawia po usuniętym timerze — nikt go już nie przeczyta.
+        let data_home = std::env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")));
+        if let Some(data_home) = data_home {
+            let stamps = data_home.join("systemd").join("timers");
+            let _ = std::fs::remove_file(stamps.join(format!("stamp-{LEGACY_NAME}.timer")));
         }
 
-        let directory = unit_dir();
-        let _ = std::fs::remove_file(directory.join(format!("{NAME}.timer")));
-        let _ = std::fs::remove_file(directory.join(format!("{NAME}.service")));
-        let _ = std::fs::remove_file(directory.join(failure_unit()));
-
-        if systemd_available() {
+        if systemd {
             let _ = systemctl(&["daemon-reload"]);
         }
 
         let _ = crontab_set(None);
-        let _ = std::fs::remove_file(autostart_file());
 
         Ok(())
     }
@@ -441,7 +463,10 @@ mod windows {
     use std::process::{Command, Stdio};
 
     /// Nazwa zadania w Harmonogramie zadań.
-    const TASK_NAME: &str = "MapStick sprawdzanie";
+    const TASK_NAME: &str = "MapStick check";
+
+    /// Nazwa sprzed wersji 0.1 — usuwana przy zakładaniu nowego zadania.
+    const LEGACY_TASK_NAME: &str = "MapStick sprawdzanie";
 
     fn schtasks(args: &[&str]) -> Result<std::process::Output> {
         Command::new("schtasks")
@@ -479,7 +504,7 @@ mod windows {
             r#"<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>MapStick — sprawdzanie nowych wydań map</Description>
+    <Description>MapStick: check for new map releases</Description>
   </RegistrationInfo>
   <Triggers>
     <CalendarTrigger>
@@ -507,7 +532,7 @@ mod windows {
   <Actions Context="Author">
     <Exec>
       <Command>"{}"</Command>
-      <Arguments>--sprawdz</Arguments>
+      <Arguments>--check</Arguments>
     </Exec>
   </Actions>
 </Task>
@@ -522,7 +547,7 @@ mod windows {
 
         // schtasks czyta XML z pliku; deklaracja mówi UTF-16, więc tak
         // zapisujemy — z BOM-em, jak eksportuje sam Harmonogram.
-        let path = std::env::temp_dir().join("mapstick-zadanie.xml");
+        let path = std::env::temp_dir().join("mapstick-task.xml");
         let bytes: Vec<u8> = [0xFF, 0xFE]
             .into_iter()
             .chain(xml.encode_utf16().flat_map(u16::to_le_bytes))
@@ -540,6 +565,7 @@ mod windows {
         ]);
         let _ = std::fs::remove_file(&path);
         let output = output?;
+        let _ = schtasks(&["/Delete", "/TN", LEGACY_TASK_NAME, "/F"]);
 
         if !output.status.success() {
             return Err(anyhow!(tr!(
@@ -558,6 +584,7 @@ mod windows {
 
     pub fn remove() -> Result<()> {
         let _ = schtasks(&["/Delete", "/TN", TASK_NAME, "/F"]);
+        let _ = schtasks(&["/Delete", "/TN", LEGACY_TASK_NAME, "/F"]);
         Ok(())
     }
 
@@ -593,7 +620,10 @@ mod macos {
     use std::process::{Command, Stdio};
 
     /// Odwrócona domena jak w każdym identyfikatorze launchd.
-    const LABEL: &str = "com.mapstick.sprawdzanie";
+    const LABEL: &str = "com.mapstick.check";
+
+    /// Etykieta sprzed wersji 0.1 — usuwana razem z bieżącą.
+    const LEGACY_LABEL: &str = "com.mapstick.sprawdzanie";
 
     fn agents_dir() -> PathBuf {
         std::env::var_os("HOME")
@@ -604,7 +634,11 @@ mod macos {
     }
 
     fn plist_path() -> PathBuf {
-        agents_dir().join(format!("{LABEL}.plist"))
+        plist_named(LABEL)
+    }
+
+    fn plist_named(label: &str) -> PathBuf {
+        agents_dir().join(format!("{label}.plist"))
     }
 
     fn launchctl(args: &[&str]) -> Result<std::process::Output> {
@@ -648,7 +682,7 @@ mod macos {
              \t<key>ProgramArguments</key>\n\
              \t<array>\n\
              \t\t<string>{exe}</string>\n\
-             \t\t<string>--sprawdz</string>\n\
+             \t\t<string>--check</string>\n\
              \t</array>\n\
              \t<key>StartCalendarInterval</key>\n\
              \t<dict>\n\
@@ -689,11 +723,11 @@ mod macos {
     }
 
     pub fn remove() -> Result<()> {
-        let path = plist_path();
-
-        if path.exists() {
-            let _ = launchctl(&["unload", "-w", &path.to_string_lossy()]);
-            let _ = std::fs::remove_file(&path);
+        for path in [plist_path(), plist_named(LEGACY_LABEL)] {
+            if path.exists() {
+                let _ = launchctl(&["unload", "-w", &path.to_string_lossy()]);
+                let _ = std::fs::remove_file(&path);
+            }
         }
 
         Ok(())
