@@ -1,18 +1,19 @@
 name: Cross-platform build
 
-# Sprawdza, czy kod działający na razie tylko lokalnie na Linuksie w ogóle
-# kompiluje się na Windows i macOS — przede wszystkim schedule.rs (schtasks,
-# launchd) i mapstick-media, napisane bez dostępu do żadnego z tych systemów.
-# Nie testuje prawdziwego wykrywania czy formatowania nośników — runnery nie
-# mają interesujących dysków wymiennych, a formatowanie cudzego dysku w CI
-# nie ma sensu i byłoby niebezpieczne, gdyby test trafił nie tam, co trzeba.
+# Sprawdza, czy całość kompiluje się i przechodzi testy na Linuksie, Windows
+# i macOS. Nie testuje prawdziwego wykrywania czy formatowania nośników —
+# runnery nie mają interesujących dysków wymiennych, a formatowanie cudzego
+# dysku w CI nie ma sensu i byłoby niebezpieczne, gdyby test trafił nie tam,
+# gdzie trzeba. macOS jest tu tylko kompilowany: obsługi nośników tam nie ma.
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches: [master]
     paths:
       - "crates/**"
+      - "packaging/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/cross-platform.yml"
@@ -25,20 +26,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout mapstick
-        uses: actions/checkout@v4
-        with:
-          path: mapstick
-
-      # Zależność ścieżkowa `../../../nudl` w Cargo.toml oczekuje forka nudl
-      # jako katalogu siostrzanego — dokładnie tak, jak stoi na maszynie
-      # deweloperskiej.
-      - name: Checkout nudl (separate-work-dir)
-        uses: actions/checkout@v4
-        with:
-          repository: MikolajQ/nudl
-          ref: separate-work-dir
-          path: nudl
+      - uses: actions/checkout@v4
 
       # Nagłówki, których Slint (winit + femtovg) potrzebuje do zbudowania
       # się na Linuksie. Windows i macOS mają to wbudowane w system.
@@ -49,13 +37,10 @@ jobs:
           sudo apt-get install -y pkg-config libfontconfig1-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libinput-dev libudev-dev libwayland-dev libxkbcommon-dev
 
       - name: Build the whole workspace
-        working-directory: mapstick
-        run: cargo build --workspace --verbose
+        run: cargo build --workspace --locked
 
       - name: Test the whole workspace
-        working-directory: mapstick
-        run: cargo test --workspace --verbose
+        run: cargo test --workspace --locked
 
       - name: Clippy
-        working-directory: mapstick
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings

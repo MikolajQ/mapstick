@@ -10,6 +10,13 @@ repository = "https://github.com/MikolajQ/mapstick"
 publish = false
 rust-version = "1.88.0"
 
+[workspace.dependencies]
+# Fork nudl z API biblioteki i osobnym katalogiem roboczym dla archiwów —
+# autor nudl nie przyjmuje kodu pisanego z pomocą AI, więc fork zostaje.
+# Przypięty do commitu, żeby build był powtarzalny; do pracy na żywej
+# kopii obok służy nadpisanie w .cargo/config.toml (poza repozytorium).
+nudl = { git = "https://github.com/MikolajQ/nudl", rev = "bb7dc91365cea01abc383e747a85a951ff0f7474" }
+
 # Binarka idzie do ludzi: bez symboli waży około połowy, a cienkie LTO
 # wycina kod zależności, którego nikt nie woła. codegen-units zostaje
 # domyślne — przy jednym budowanie Slinta trwa kilka razy dłużej.
