@@ -448,12 +448,24 @@ export component AppWindow inherits Window {
                         }
                     }
 
+                    // Przewinięcie idzie przez minutnik, o klatkę później: tuż po
+                    // podmianie modelu (przy starcie) ScrollView zna jeszcze starą
+                    // wysokość zawartości i przycina pozycję z powrotem do zera.
+                    scroll-timer := Timer {
+                        interval: 30ms;
+                        running: false;
+                        triggered => {
+                            self.running = false;
+                            model-list.viewport-y = min(0px, max(
+                                model-list.visible-height - root.models.length * 32px,
+                                model-list.visible-height / 2 - 16px - root.scroll-row * 32px));
+                        }
+                    }
+
                     model-list := ListView {
                         property <int> scroll-request: root.scroll-serial;
                         changed scroll-request => {
-                            self.viewport-y = min(0px, max(
-                                self.visible-height - self.viewport-height,
-                                self.visible-height / 2 - 16px - root.scroll-row * 32px));
+                            scroll-timer.running = true;
                         }
 
                         for row[i] in root.models: Rectangle {
