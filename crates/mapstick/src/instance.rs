@@ -224,6 +224,38 @@ pub fn listen(on_link: impl Fn(String) + Send + 'static) {
 #[cfg(windows)]
 pub fn cleanup() {}
 
+/// Nazwa mutexu, który instalator sprawdza jako `AppMutex` (mapstick.iss).
+#[cfg(windows)]
+const RUNNING_MUTEX: &str = "MapStickRunning";
+
+/// Daje instalatorowi znać, że MapStick działa.
+///
+/// Odinstalowanie przy otwartym oknie usuwało skrót, wpis i zadanie, ale nie
+/// `mapstick.exe`: plik był w użyciu, a instalacja bez administratora nie
+/// może zlecić usunięcia przy restarcie, więc zostawał na zawsze. Instalator
+/// i deinstalator widzą ten mutex i proszą o zamknięcie programu. Uchwytu
+/// nie zamykamy — robi to system razem z procesem.
+#[cfg(windows)]
+pub fn announce_running() {
+    use windows_sys::Win32::System::Threading::CreateMutexW;
+
+    let name: Vec<u16> = RUNNING_MUTEX.encode_utf16().chain([0]).collect();
+
+    // SAFETY: nazwa jest zakończona zerem i żyje do końca wywołania; bez
+    // atrybutów bezpieczeństwa i bez przejmowania mutexu na własność.
+    let handle = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
+
+    if handle.is_null() {
+        tracing::warn!(
+            "Nie założono mutexu {RUNNING_MUTEX}: {}",
+            std::io::Error::last_os_error()
+        );
+    }
+}
+
+#[cfg(not(windows))]
+pub fn announce_running() {}
+
 #[cfg(not(any(unix, windows)))]
 pub fn hand_off(_url: &str) -> bool {
     false

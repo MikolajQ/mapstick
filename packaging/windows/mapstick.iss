@@ -32,6 +32,9 @@ OutputDir=..\..\dist
 OutputBaseFilename=MapStick-{#AppVersion}-setup
 SetupIconFile=mapstick.ico
 UninstallDisplayIcon={app}\mapstick.exe
+; Program trzyma ten mutex (instance.rs) — także przy sprawdzaniu w tle.
+; Bez tego odinstalowanie przy otwartym oknie zostawiało mapstick.exe.
+AppMutex=MapStickRunning
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern

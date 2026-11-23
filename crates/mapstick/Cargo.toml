@@ -32,6 +32,8 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 [target.'cfg(windows)'.dependencies]
 # Nazwany potok, którym drugie uruchomienie przekazuje odnośnik oknu (instance.rs).
 tokio = { version = "1.36.0", features = ["net", "io-util"] }
+# Nazwany mutex, po którym instalator poznaje działający program (instance.rs).
+windows-sys = { version = "0.61.2", features = ["Win32_Security", "Win32_System_Threading"] }
 
 [dev-dependencies]
 tempfile = "3.10.1"

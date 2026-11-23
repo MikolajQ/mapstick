@@ -3096,6 +3096,8 @@ fn main() -> Result<()> {
         language.unwrap_or("en (domyślny)")
     );
 
+    instance::announce_running();
+
     rustls::crypto::ring::default_provider()
         .install_default()
         .map_err(|_| anyhow!(tr!("Could not set up the rustls crypto provider.")))?;
