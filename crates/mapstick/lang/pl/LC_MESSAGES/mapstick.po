@@ -761,3 +761,95 @@ msgstr "{} nie powiodło się: {}"
 #: rust
 msgid "cancelled in the permission prompt"
 msgstr "anulowano w oknie uprawnień"
+
+#: rust
+msgid "The maker’s service did not answer within {} seconds."
+msgstr "Serwis producenta nie odpowiedział w ciągu {} sekund."
+
+#: rust
+msgid "MapStick cannot check for new releases"
+msgstr "MapStick nie może sprawdzić nowych wydań"
+
+#: rust
+msgid "MapStick is watching {}"
+msgstr "MapStick pilnuje: {}"
+
+#: rust
+msgid "No answer from the maker since {}. Last error: {}. I keep trying every day."
+msgstr "Producent nie odpowiada od {}. Ostatni błąd: {}. Próbuję dalej codziennie."
+
+#: rust
+msgid "No answer from the maker yet. Last error: {}. I keep trying every day."
+msgstr "Producent jeszcze nie odpowiedział. Ostatni błąd: {}. Próbuję dalej codziennie."
+
+#: rust
+msgid "Last answer from the maker: {}."
+msgstr "Ostatnia odpowiedź producenta: {}."
+
+#: rust
+msgid "No answer from the maker yet."
+msgstr "Producent jeszcze nie odpowiedział."
+
+#: rust
+msgid "Status reports: {}."
+msgstr "Meldunki: {}."
+
+#: rust
+msgid "the check did not run"
+msgstr "sprawdzanie się nie uruchomiło"
+
+#: rust
+msgid "{}: no release seen yet"
+msgstr "{}: jeszcze nie widziałem żadnego wydania"
+
+#: rust
+msgid "{}: {} — the car has it"
+msgstr "{}: {} — auto ją ma"
+
+#: rust
+msgid "{}: {} — the car has {}"
+msgstr "{}: {} — auto ma {}"
+
+#: rust
+msgid "{}: {} — version in the car unknown"
+msgstr "{}: {} — wersja w aucie nieznana"
+
+#: rust
+msgid "MapStick: the update check did not run"
+msgstr "MapStick: sprawdzanie aktualizacji się nie uruchomiło"
+
+#: rust
+msgid "The background check for new map releases failed. Open MapStick once — it sets the check up again. Details: journalctl --user -u {}.service"
+msgstr "Sprawdzanie nowych wydań map w tle zawiodło. Otwórz raz MapSticka — ustawi sprawdzanie na nowo. Szczegóły: journalctl --user -u {}.service"
+
+#: rust
+msgid "never"
+msgstr "nigdy"
+
+#: ui/app.slint
+msgid "status report:"
+msgstr "meldunek:"
+
+#: rust
+msgid "The background check has not run yet."
+msgstr "Sprawdzanie w tle jeszcze się nie uruchomiło."
+
+#: rust
+msgid "The background check has not run since {} — the schedule was set up again now; if this stays, see the system log."
+msgstr "Sprawdzanie w tle nie uruchomiło się od {} — harmonogram został właśnie założony na nowo; jeśli to się utrzyma, zajrzyj do dziennika systemowego."
+
+#: rust
+msgid "Last background check: {} — failed: {}."
+msgstr "Ostatnie sprawdzenie w tle: {} — nieudane: {}."
+
+#: rust
+msgid "Last background check: {}."
+msgstr "Ostatnie sprawdzenie w tle: {}."
+
+#: rust
+msgid "The background check will report {} that it works."
+msgstr "Sprawdzanie w tle zamelduje {}, że działa."
+
+#: rust
+msgid "No status reports — only an alarm when the check stops working."
+msgstr "Bez meldunków — tylko alarm, gdy sprawdzanie przestanie działać."

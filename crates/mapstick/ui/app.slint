@@ -183,6 +183,9 @@ export component AppWindow inherits Window {
     in property <bool> selected-watch: false;
     in property <[string]> intervals;
     in-out property <int> interval-index: 1;
+    /// Jak często sprawdzanie w tle melduje, że działa; ostatnia pozycja — nigdy.
+    in property <[string]> reports;
+    in-out property <int> report-index: 1;
     /// Wersje, które mogą siedzieć w aucie — pierwsza pozycja to „nie wiem”.
     in property <[string]> installed-choices;
     in-out property <int> installed-index: 0;
@@ -261,6 +264,7 @@ export component AppWindow inherits Window {
     callback toggle-favourite();
     callback set-watch(bool);
     callback set-interval(int);
+    callback set-report(int);
     callback set-installed(int);
     callback open-favourite(string);
 
@@ -533,6 +537,20 @@ export component AppWindow inherits Window {
                             }
 
                             Text {
+                                text: @tr("status report:");
+                                vertical-alignment: center;
+                                font-size: 12px;
+                                opacity: 0.7;
+                            }
+                            ComboBox {
+                                width: 120px;
+                                model: root.reports;
+                                current-index <=> root.report-index;
+                                enabled: root.selected-watch;
+                                selected => { root.set-report(self.current-index); }
+                            }
+
+                            Text {
                                 text: @tr("in the car:");
                                 vertical-alignment: center;
                                 font-size: 12px;
@@ -559,11 +577,16 @@ export component AppWindow inherits Window {
                             }
                         }
 
-                        if root.selected-is-favourite && root.watch-note != "": Text {
-                            text: root.watch-note;
-                            font-size: 11px;
-                            opacity: 0.7;
-                            overflow: elide;
+                        if root.selected-is-favourite && root.watch-note != "": Rectangle {
+                            height: watch-note-text.preferred-height;
+
+                            watch-note-text := Text {
+                                width: parent.width;
+                                text: root.watch-note;
+                                font-size: 11px;
+                                opacity: 0.7;
+                                wrap: word-wrap;
+                            }
                         }
 
                         HorizontalLayout {

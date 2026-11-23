@@ -83,6 +83,74 @@ impl News {
     }
 }
 
+/// Meldunek o samym sprawdzaniu: że działa, albo że od dawna nie działa.
+#[derive(Debug, PartialEq, Eq)]
+struct Report {
+    watched: usize,
+    /// Najświeższa odpowiedź producenta, z tła albo z okna.
+    answered: Option<Timestamp>,
+    /// Po jednym wierszu na pilnowany model.
+    lines: Vec<String>,
+    /// Ostatni błąd, gdy producent milczy dłużej, niż powinien.
+    trouble: Option<String>,
+    /// Kiedy następny meldunek, o ile w ogóle.
+    next: Option<Interval>,
+}
+
+impl Report {
+    fn summary(&self) -> String {
+        if self.trouble.is_some() {
+            return tr!("MapStick cannot check for new releases");
+        }
+
+        tr!("MapStick is watching {}", count_phrase(self.watched))
+    }
+
+    fn body(&self) -> String {
+        let mut body = match (&self.trouble, self.answered) {
+            (Some(error), Some(at)) => tr!(
+                "No answer from the maker since {}. Last error: {}. I keep trying every day.",
+                local_time(at),
+                error
+            ),
+            (Some(error), None) => tr!(
+                "No answer from the maker yet. Last error: {}. I keep trying every day.",
+                error
+            ),
+            (None, Some(at)) => tr!("Last answer from the maker: {}.", local_time(at)),
+            (None, None) => tr!("No answer from the maker yet."),
+        };
+
+        for line in &self.lines {
+            body.push('\n');
+            body.push_str(line);
+        }
+
+        if self.trouble.is_none()
+            && let Some(next) = self.next
+        {
+            body.push('\n');
+            body.push_str(&tr!("Status reports: {}.", crate::i18n::tr(next.label())));
+        }
+
+        body
+    }
+}
+
+fn count_phrase(count: usize) -> String {
+    match count {
+        1 => tr!("1 model"),
+        n => tr!("{} models", n),
+    }
+}
+
+/// Czas w strefie komputera, bez sekund — do czytania, nie do porównywania.
+pub(crate) fn local_time(at: Timestamp) -> String {
+    at.to_zoned(jiff::tz::TimeZone::system())
+        .strftime("%Y-%m-%d %H:%M")
+        .to_string()
+}
+
 /// Jedno sprawdzenie. `force` pomija oba odstępy — do ręcznego wywołania.
 ///
 /// Pytanie do serwisu jest asynchroniczne, powiadomienie nie: `notify-rust`
@@ -90,10 +158,17 @@ impl News {
 /// się to „Cannot start a runtime from within a runtime”. Środowisko żyje więc
 /// tylko tak długo, jak trwa pytanie.
 pub fn run(force: bool) -> Result<()> {
-    let news = tokio::runtime::Builder::new_current_thread()
+    let (report, news) = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?
         .block_on(gather(force))?;
+
+    // Najpierw meldunek: przy kłopotach ma być pierwszym, co widać.
+    if let Some(report) = report
+        && let Err(e) = notify(&report.summary(), &report.body())
+    {
+        tracing::warn!("Nie udało się pokazać meldunku: {e}");
+    }
 
     for item in news {
         if let Err(e) = announce(&item) {
@@ -104,7 +179,7 @@ pub fn run(force: bool) -> Result<()> {
     Ok(())
 }
 
-async fn gather(force: bool) -> Result<Vec<News>> {
+async fn gather(force: bool) -> Result<(Option<Report>, Vec<News>)> {
     let path = mapstick_store::default_path();
 
     // Blokada obejmuje cały cykl odczyt-zmiana-zapis: w tym czasie otwarte
@@ -114,8 +189,10 @@ async fn gather(force: bool) -> Result<Vec<News>> {
 
     if store.watched().next().is_none() {
         tracing::info!("Żaden model nie jest pilnowany — nie ma czego sprawdzać");
-        return Ok(Vec::new());
+        return Ok((None, Vec::new()));
     }
+
+    store.background.ran_at = Some(mapstick_store::now());
 
     if force || due(&store, store.check_interval) {
         check(&mut store).await;
@@ -123,13 +200,26 @@ async fn gather(force: bool) -> Result<Vec<News>> {
         tracing::info!("Producenta pytano niedawno — tylko przypomnienia");
     }
 
-    let news = reminders(&mut store, force, Timestamp::now());
+    let now = Timestamp::now();
+    let news = reminders(&mut store, force, now);
+    let report = report(&mut store, force, now, !news.is_empty());
 
     // Zapis idzie przed powiadomieniami: to, czego się dowiedzieliśmy, ma
     // przetrwać nawet wtedy, gdy powiadomienia nie ma komu pokazać.
     store.save(&path)?;
 
-    Ok(news)
+    Ok((report, news))
+}
+
+/// Najświeższa odpowiedź producenta o którymkolwiek pilnowanym modelu — także
+/// ta, którą dostało przy uruchomieniu samo okno aplikacji.
+fn freshest(store: &Store) -> Option<Timestamp> {
+    store
+        .watched()
+        .filter_map(|f| f.latest_checked_at.as_deref())
+        .chain(store.background.answered_at.as_deref())
+        .filter_map(|t| t.parse::<Timestamp>().ok())
+        .max()
 }
 
 /// Czy od ostatniego pytania do producenta minęło dość czasu.
@@ -138,30 +228,92 @@ async fn gather(force: bool) -> Result<Vec<News>> {
 /// zrobione przez samą aplikację przy uruchomieniu. Jeśli okno było otwarte
 /// godzinę temu, użytkownik widział to samo, co mielibyśmy mu powiedzieć.
 fn due(store: &Store, interval: Interval) -> bool {
-    let newest = store
-        .watched()
-        .filter_map(|f| f.latest_checked_at.as_deref())
-        .filter_map(|t| t.parse::<Timestamp>().ok())
-        .max();
-
-    let Some(newest) = newest else {
+    let Some(newest) = freshest(store) else {
         return true;
-    };
-
-    // W godzinach, nie w dniach: znacznik czasu jest punktem na osi, a nie
-    // datą w kalendarzu, i jiff słusznie nie pozwala dodawać do niego dni.
-    let span = match interval {
-        Interval::Daily => 24.hours(),
-        Interval::Weekly => (7 * 24).hours(),
-        Interval::Monthly => (30 * 24).hours(),
     };
 
     // Margines, żeby sprawdzenie o tej samej porze dnia nie wypadało raz na
     // dwa razy przez kilka sekund poślizgu harmonogramu.
-    newest + span - 1.hour() <= Timestamp::now()
+    newest + interval.hours().hours() - 1.hour() <= Timestamp::now()
 }
 
-/// Odpytuje serwis i zapisuje, co zastał.
+/// Ile ponad odstęp pytań producent może milczeć, zanim uznamy to za awarię.
+/// Trzy doby mieszczą wyłączony na weekend komputer i dzień bez sieci.
+const SILENCE_GRACE_HOURS: i64 = 72;
+
+/// Czy dziś należy się meldunek — i jaki. Zapisuje, że zameldowano.
+///
+/// Zwykły meldunek przychodzi co `report_interval` i jest po to, żeby jego
+/// brak dało się zauważyć. Powiadomienie o nowym wydaniu też dowodzi, że
+/// czuwamy, więc odsuwa zwykły meldunek. Alarm o milczącym producencie
+/// przychodzi codziennie, nawet przy wyłączonych meldunkach: to jedyna
+/// wiadomość, której nie wolno przegapić.
+fn report(store: &mut Store, force: bool, now: Timestamp, news_sent: bool) -> Option<Report> {
+    let answered = freshest(store);
+    let reported = store
+        .background
+        .reported_at
+        .as_deref()
+        .and_then(|t| t.parse::<Timestamp>().ok());
+    let older_than = |hours: i64| reported.is_none_or(|t| t + hours.hours() - 1.hour() <= now);
+
+    let limit = (store.check_interval.hours() + SILENCE_GRACE_HOURS).hours();
+    let silent = match answered {
+        Some(at) => at + limit <= now,
+        None => store.background.error.is_some(),
+    };
+    let trouble = silent.then(|| {
+        store
+            .background
+            .error
+            .clone()
+            .unwrap_or_else(|| tr!("the check did not run"))
+    });
+
+    let due = if trouble.is_some() {
+        force || older_than(24)
+    } else if news_sent {
+        store.background.reported_at = Some(now.to_string());
+        false
+    } else {
+        store
+            .report_interval
+            .is_some_and(|i| force || older_than(i.hours()))
+    };
+
+    if !due {
+        return None;
+    }
+
+    store.background.reported_at = Some(now.to_string());
+
+    let lines = store.watched().take(5).map(status_line).collect();
+
+    Some(Report {
+        watched: store.watched().count(),
+        answered,
+        lines,
+        trouble,
+        next: store.report_interval,
+    })
+}
+
+/// Jeden wiersz meldunku: co wystawia producent i co wiemy o aucie.
+fn status_line(favourite: &Favourite) -> String {
+    let label = &favourite.label;
+
+    let Some(latest) = favourite.latest_seen_version.as_deref() else {
+        return tr!("{}: no release seen yet", label);
+    };
+
+    match favourite.known_version() {
+        Some(known) if known == latest => tr!("{}: {} — the car has it", label, latest),
+        Some(known) => tr!("{}: {} — the car has {}", label, latest, known),
+        None => tr!("{}: {} — version in the car unknown", label, latest),
+    }
+}
+
+/// Odpytuje serwis i zapisuje, co zastał — także to, że się nie udało.
 async fn check(store: &mut Store) {
     let mut combos: Vec<(String, String)> = store
         .watched()
@@ -171,16 +323,25 @@ async fn check(store: &mut Store) {
     combos.dedup();
 
     let watched: HashSet<String> = store.watched().map(|f| f.model_id.clone()).collect();
+    let mut answered = false;
+    let mut errors = Vec::new();
 
     for (brand, region) in combos {
         let code = BRANDS[brand_index(&brand)].as_code_str();
 
         let entries = match fetch_entries(code, &region).await {
-            Ok(entries) => entries,
-            // Brak sieci o czwartej nad ranem to nie jest powód do alarmu.
-            // Następne sprawdzenie zastanie ten sam stan i zapyta jeszcze raz.
+            Ok(entries) => {
+                answered = true;
+                entries
+            }
+            // Pojedyncza porażka to nie powód do alarmu — następne sprawdzenie
+            // zapyta jeszcze raz. Zapisujemy ją jednak: dopiero seria takich
+            // porażek, widoczna w meldunku, mówi, że coś jest nie tak.
             Err(e) => {
+                // Pełny łańcuch idzie do dziennika; do meldunku i okna sama
+                // przyczyna — reqwest powtarza w łańcuchu adres po kilka razy.
                 tracing::warn!("Nie udało się sprawdzić {brand}/{region}: {e:#}");
+                errors.push(format!("{brand}/{region}: {}", e.root_cause()));
                 continue;
             }
         };
@@ -207,6 +368,11 @@ async fn check(store: &mut Store) {
             }
         }
     }
+
+    if answered {
+        store.background.answered_at = Some(mapstick_store::now());
+    }
+    store.background.error = (!errors.is_empty()).then(|| errors.join("; "));
 }
 
 /// Wydania, o których trzeba dziś przypomnieć. Zapisuje, że przypomniano.
@@ -283,6 +449,35 @@ fn mark_installed(model_id: &str, version: &str) -> Result<()> {
 
     store.save(&path)?;
     tracing::info!("{model_id}: zaznaczone, że auto ma {version}");
+
+    Ok(())
+}
+
+/// Powiadomienie bez przycisków i bez czekania na odpowiedź — do meldunków.
+fn notify(summary: &str, body: &str) -> Result<()> {
+    let mut notification = notify_rust::Notification::new();
+    notification
+        .summary(summary)
+        .body(body)
+        .appname("MapStick")
+        .timeout(notify_rust::Timeout::Milliseconds(20_000));
+
+    #[cfg(target_os = "linux")]
+    {
+        let _handle = notification.show()?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        register_app_id();
+        notification.app_id(APP_ID);
+        notification.show()?;
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    {
+        notification.show()?;
+    }
 
     Ok(())
 }
@@ -548,6 +743,97 @@ mod tests {
         store.upsert(f);
 
         assert!(due(&store, Interval::Monthly));
+    }
+
+    fn checked_hours_ago(hours: i64) -> Store {
+        let mut store = Store::default();
+        let mut f = favourite();
+        f.latest_checked_at = Some((Timestamp::now() - hours.hours()).to_string());
+        store.upsert(f);
+        store
+    }
+
+    /// Pierwszy przebieg po włączeniu melduje od razu — to dowód, że
+    /// harmonogram w ogóle nas uruchamia.
+    #[test]
+    fn the_first_run_reports_at_once() {
+        let mut store = checked_hours_ago(1);
+
+        let report = report(&mut store, false, now(), false).unwrap();
+        assert_eq!(report.trouble, None);
+        assert_eq!(report.watched, 1);
+        assert!(report.body().contains("New IONIQ 5: NE1.002"));
+        assert!(store.background.reported_at.is_some());
+    }
+
+    #[test]
+    fn a_weekly_report_waits_a_week() {
+        let mut store = checked_hours_ago(1);
+        store.background.reported_at = Some((now() - 48.hours()).to_string());
+        assert_eq!(report(&mut store, false, now(), false), None);
+
+        store.background.reported_at = Some((now() - (7 * 24).hours()).to_string());
+        assert!(report(&mut store, false, now(), false).is_some());
+    }
+
+    /// Powiadomienie o wydaniu samo dowodzi, że czuwamy.
+    #[test]
+    fn news_counts_as_a_report() {
+        let mut store = checked_hours_ago(1);
+
+        assert_eq!(report(&mut store, false, now(), true), None);
+        assert!(store.background.reported_at.is_some());
+    }
+
+    #[test]
+    fn reports_switched_off_stay_quiet() {
+        let mut store = checked_hours_ago(1);
+        store.report_interval = None;
+
+        assert_eq!(report(&mut store, false, now(), false), None);
+    }
+
+    /// Sedno: producent milczy dłużej niż odstęp plus zapas — alarm idzie
+    /// nawet przy wyłączonych meldunkach i mimo świeżego powiadomienia.
+    #[test]
+    fn a_silent_maker_raises_the_alarm_daily() {
+        let mut store = checked_hours_ago(11 * 24);
+        store.report_interval = None;
+        store.background.error = Some("hyundai/EU: timeout".to_owned());
+        store.background.reported_at = Some((now() - 2.hours()).to_string());
+
+        assert_eq!(
+            report(&mut store, false, now(), true),
+            None,
+            "dwie godziny po poprzednim alarmie to za wcześnie"
+        );
+
+        store.background.reported_at = Some((now() - 25.hours()).to_string());
+        let alarm = report(&mut store, false, now(), true).unwrap();
+        assert!(alarm.summary().contains("cannot check"));
+        assert!(alarm.body().contains("hyundai/EU: timeout"));
+    }
+
+    #[test]
+    fn a_short_silence_is_not_an_alarm() {
+        let mut store = checked_hours_ago(8 * 24);
+        store.background.error = Some("offline".to_owned());
+
+        let report = report(&mut store, false, now(), false).unwrap();
+        assert_eq!(report.trouble, None, "tydzień plus dzień mieści się w zapasie");
+    }
+
+    /// Okno aplikacji pyta producenta przy każdym uruchomieniu — jego
+    /// odpowiedź też się liczy, inaczej używana na co dzień aplikacja
+    /// dostawałaby fałszywe alarmy.
+    #[test]
+    fn an_answer_seen_by_the_window_counts() {
+        let mut store = checked_hours_ago(1);
+        store.background.answered_at = Some((now() - (60 * 24).hours()).to_string());
+        store.background.error = Some("stary błąd".to_owned());
+
+        let report = report(&mut store, false, now(), false).unwrap();
+        assert_eq!(report.trouble, None);
     }
 
     /// Modele bez pilnowania nie wpływają na odstęp — także wtedy, gdy

@@ -110,6 +110,16 @@ impl Interval {
             Interval::Monthly => "monthly",
         }
     }
+
+    /// Długość odstępu w godzinach — znacznik czasu to punkt na osi, nie data
+    /// w kalendarzu, więc „dni” nie mają tu sensu.
+    pub fn hours(self) -> i64 {
+        match self {
+            Interval::Daily => 24,
+            Interval::Weekly => 7 * 24,
+            Interval::Monthly => 30 * 24,
+        }
+    }
 }
 
 /// Wariant zestawu multimedialnego, wyczytany z numeru wersji.
@@ -204,6 +214,32 @@ pub struct Download {
     pub at: String,
 }
 
+/// Ślad po sprawdzaniu w tle.
+///
+/// Zapisywany przy każdym przebiegu, także nieudanym. Bez niego cisza znaczy
+/// dwie różne rzeczy naraz — „nie ma nic nowego” i „sprawdzanie od miesiąca
+/// nie działa” — i nie da się ich od siebie odróżnić.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Background {
+    /// Ostatnie uruchomienie przez harmonogram, udane czy nie.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ran_at: Option<String>,
+    /// Ostatnia odpowiedź producenta uzyskana w tle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answered_at: Option<String>,
+    /// Co poszło nie tak przy ostatnim pytaniu. `None` — nic.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// Kiedy ostatnio daliśmy znać, że czuwamy. Liczy się każde powiadomienie,
+    /// także to o nowym wydaniu.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reported_at: Option<String>,
+}
+
+fn default_report_interval() -> Option<Interval> {
+    Some(Interval::Weekly)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Store {
     /// Numer schematu, od pierwszego dnia — żeby późniejsza zmiana formatu nie
@@ -212,6 +248,14 @@ pub struct Store {
     /// Jak często pyta o nowe wydania sprawdzanie w tle.
     #[serde(default)]
     pub check_interval: Interval,
+    /// Jak często sprawdzanie w tle melduje, że działa. `None` — nigdy.
+    ///
+    /// Meldunek jest po to, żeby jego **brak** był widoczny: usługa, której
+    /// system nie potrafi uruchomić, nie powie o tym sama.
+    #[serde(default = "default_report_interval")]
+    pub report_interval: Option<Interval>,
+    #[serde(default)]
+    pub background: Background,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_selection: Option<LastSelection>,
     #[serde(default)]
@@ -225,6 +269,8 @@ impl Default for Store {
         Self {
             version: 1,
             check_interval: Interval::default(),
+            report_interval: default_report_interval(),
+            background: Background::default(),
             last_selection: None,
             items: Vec::new(),
             downloads: Vec::new(),
@@ -569,5 +615,20 @@ mod tests {
         f.downloaded_version = Some("A".to_owned());
 
         assert_eq!(f.has_update(), Some(true));
+    }
+
+    /// Plik sprzed meldunków dostaje meldunek co tydzień — a wyłączony
+    /// świadomie zostaje wyłączony.
+    #[test]
+    fn report_interval_defaults_to_weekly_but_keeps_never() {
+        let old: Store = serde_json::from_str(r#"{"version":1}"#).unwrap();
+        assert_eq!(old.report_interval, Some(Interval::Weekly));
+
+        let never: Store = serde_json::from_str(r#"{"version":1,"report_interval":null}"#).unwrap();
+        assert_eq!(never.report_interval, None);
+
+        let text = serde_json::to_string(&never).unwrap();
+        let again: Store = serde_json::from_str(&text).unwrap();
+        assert_eq!(again.report_interval, None);
     }
 }

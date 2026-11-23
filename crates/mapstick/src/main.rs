@@ -80,6 +80,7 @@ enum Cmd {
     ToggleFavourite,
     SetWatch(bool),
     SetInterval(usize),
+    SetReport(usize),
     SetInstalled(usize),
     OpenFavourite(String),
     LoadModels { brand: usize, region: usize },
@@ -183,6 +184,15 @@ impl Entry {
             released: self.released.as_str().into(),
         }
     }
+}
+
+/// Pozycja na liście meldunków: odstępy po kolei, na końcu „nigdy”.
+fn report_position(report: Option<mapstick_store::Interval>) -> usize {
+    let all = mapstick_store::Interval::ALL;
+
+    report
+        .and_then(|r| all.iter().position(|i| *i == r))
+        .unwrap_or(all.len())
 }
 
 fn brand_index(name: &str) -> usize {
@@ -327,6 +337,29 @@ fn format_size(bytes: u64) -> String {
 /// Wolna funkcja, nie metoda: sprawdzanie ulubionych dzieje się w osobnym
 /// zadaniu, które nie ma dostępu do [`Worker`].
 async fn fetch_entries(brand_code: &str, region: &str) -> Result<Vec<Entry>> {
+    within_time_limit(fetch_entries_now(brand_code, region)).await
+}
+
+/// Jak długo czekamy na odpowiedź serwisu producenta.
+///
+/// Klient nudl nie ma własnych limitów czasu, więc połączenie zerwane po cichu
+/// (uśpienie komputera, zmiana sieci) wisiałoby bez końca: w oknie jako
+/// wieczne „sprawdzam…”, a w tle jako przebieg, który się nie kończy —
+/// i dopóki trwa, harmonogram nie uruchomi następnego.
+const NETWORK_TIMEOUT: Duration = Duration::from_secs(90);
+
+async fn within_time_limit<T>(work: impl Future<Output = Result<T>>) -> Result<T> {
+    tokio::time::timeout(NETWORK_TIMEOUT, work)
+        .await
+        .map_err(|_| {
+            anyhow!(tr!(
+                "The maker’s service did not answer within {} seconds.",
+                NETWORK_TIMEOUT.as_secs()
+            ))
+        })?
+}
+
+async fn fetch_entries_now(brand_code: &str, region: &str) -> Result<Vec<Entry>> {
     let client = NuClientBuilder::new().build()?;
     client.validate_region(brand_code, region).await?;
     let guid = client.get_guid(region).await?;
@@ -544,6 +577,8 @@ impl Worker {
             .position(|i| *i == self.store.check_interval)
             .unwrap_or(1) as i32;
 
+        let report = report_position(self.store.report_interval) as i32;
+
         let (labels, choices, chosen) = self.installed_options();
         self.installed_choices = choices;
 
@@ -555,6 +590,7 @@ impl Worker {
             ui.set_selected_is_favourite(is_favourite);
             ui.set_selected_watch(watch);
             ui.set_interval_index(interval);
+            ui.set_report_index(report);
             ui.set_installed_choices(ModelRc::new(VecModel::from(labels)));
             ui.set_installed_index(chosen as i32);
             ui.set_watch_note(note.into());
@@ -670,7 +706,7 @@ impl Worker {
             n => tr!("{} models", n),
         };
 
-        match schedule::current() {
+        let schedule = match schedule::current() {
             Some(kind) => tr!(
                 "Asking the maker {} (watched: {}); a new release is brought up daily — \
                  woken by {}.",
@@ -678,7 +714,40 @@ impl Worker {
                 count_phrase,
                 i18n::tr(kind.label())
             ),
-            None => tr!("No way to check in the background — the schedule was not set up."),
+            None => {
+                return tr!("No way to check in the background — the schedule was not set up.");
+            }
+        };
+
+        format!("{schedule} {}", self.background_note())
+    }
+
+    /// Ślad ostatniego przebiegu w tle — żeby zepsute sprawdzanie było widać
+    /// w oknie, a nie dopiero po miesiącu ciszy.
+    fn background_note(&self) -> String {
+        let background = &self.store.background;
+        let ran = background
+            .ran_at
+            .as_deref()
+            .and_then(|t| t.parse::<jiff::Timestamp>().ok());
+
+        let Some(ran) = ran else {
+            return tr!("The background check has not run yet.");
+        };
+
+        // Harmonogram budzi codziennie; dwie doby bez śladu to już nie
+        // wyłączony na noc komputer, tylko coś, co przestało działać.
+        let stalled = ran + jiff::SignedDuration::from_hours(48) <= jiff::Timestamp::now();
+        let when = watch::local_time(ran);
+
+        match (&background.error, stalled) {
+            (_, true) => tr!(
+                "The background check has not run since {} — the schedule was set up \
+                 again now; if this stays, see the system log.",
+                when
+            ),
+            (Some(error), false) => tr!("Last background check: {} — failed: {}.", when, error),
+            (None, false) => tr!("Last background check: {}.", when),
         }
     }
 
@@ -703,6 +772,18 @@ impl Worker {
         } else {
             tr!("No longer watching {}.", label)
         });
+    }
+
+    fn set_report(&mut self, index: usize) {
+        let report = mapstick_store::Interval::ALL.get(index).copied();
+        self.store.report_interval = report;
+        self.save_store();
+
+        let message = match report {
+            Some(i) => tr!("The background check will report {} that it works.", i18n::tr(i.label())),
+            None => tr!("No status reports — only an alarm when the check stops working."),
+        };
+        self.set_status(message, false);
     }
 
     fn set_interval(&mut self, index: usize) {
@@ -1051,9 +1132,12 @@ impl Worker {
         // Rozmiar znany jest dopiero po odpytaniu /car/download, więc dociągamy
         // go osobno — dzięki temu sprawdzenie wolnego miejsca będzie dokładne.
         let client = NuClientBuilder::new().build()?;
-        let firmware = client
-            .get_firmware_info(&self.region, &self.entries[index].car)
-            .await?;
+        let firmware = within_time_limit(async {
+            Ok(client
+                .get_firmware_info(&self.region, &self.entries[index].car)
+                .await?)
+        })
+        .await?;
 
         let (download, extracted) = firmware_totals(&firmware);
         tracing::info!(
@@ -2684,6 +2768,7 @@ impl Worker {
                 Cmd::ToggleFavourite => self.toggle_favourite(),
                 Cmd::SetWatch(on) => self.set_watch(on),
                 Cmd::SetInterval(index) => self.set_interval(index),
+                Cmd::SetReport(index) => self.set_report(index),
                 Cmd::SetInstalled(index) => self.set_installed(index),
                 Cmd::OpenFavourite(id) => self.open_favourite(id).await,
                 Cmd::FavouritesRefreshed(versions) => self.apply_favourite_versions(versions),
@@ -2820,6 +2905,13 @@ fn main() -> Result<()> {
         .map(|i| i18n::tr(i.label()).into())
         .collect();
     ui.set_intervals(ModelRc::new(VecModel::from(intervals)));
+
+    let reports: Vec<SharedString> = mapstick_store::Interval::ALL
+        .iter()
+        .map(|i| i18n::tr(i.label()).into())
+        .chain(std::iter::once(tr!("never").into()))
+        .collect();
+    ui.set_reports(ModelRc::new(VecModel::from(reports)));
     ui.set_models(ModelRc::new(VecModel::<ModelRow>::default()));
     ui.set_status(tr!("Pick a brand and a region — the model list loads by itself.").into());
 
@@ -3131,6 +3223,11 @@ fn wire_callbacks(ui: &AppWindow, tx: UnboundedSender<Cmd>) {
     let t = tx.clone();
     ui.on_set_interval(move |index| {
         let _ = t.send(Cmd::SetInterval(index.max(0) as usize));
+    });
+
+    let t = tx.clone();
+    ui.on_set_report(move |index| {
+        let _ = t.send(Cmd::SetReport(index.max(0) as usize));
     });
 
     let t = tx.clone();

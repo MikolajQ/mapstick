@@ -623,3 +623,95 @@ msgstr "{} 실패: {}"
 #: rust
 msgid "cancelled in the permission prompt"
 msgstr "권한 확인 창에서 취소됨"
+
+#: rust
+msgid "The maker’s service did not answer within {} seconds."
+msgstr "제조사 서비스가 {}초 안에 응답하지 않았습니다."
+
+#: rust
+msgid "MapStick cannot check for new releases"
+msgstr "MapStick이 새 버전을 확인할 수 없습니다"
+
+#: rust
+msgid "MapStick is watching {}"
+msgstr "MapStick 감시 중: {}"
+
+#: rust
+msgid "No answer from the maker since {}. Last error: {}. I keep trying every day."
+msgstr "{} 이후 제조사의 응답이 없습니다. 마지막 오류: {}. 매일 다시 시도합니다."
+
+#: rust
+msgid "No answer from the maker yet. Last error: {}. I keep trying every day."
+msgstr "아직 제조사의 응답이 없습니다. 마지막 오류: {}. 매일 다시 시도합니다."
+
+#: rust
+msgid "Last answer from the maker: {}."
+msgstr "제조사의 마지막 응답: {}."
+
+#: rust
+msgid "No answer from the maker yet."
+msgstr "아직 제조사의 응답이 없습니다."
+
+#: rust
+msgid "Status reports: {}."
+msgstr "상태 보고: {}."
+
+#: rust
+msgid "the check did not run"
+msgstr "확인이 실행되지 않았습니다"
+
+#: rust
+msgid "{}: no release seen yet"
+msgstr "{}: 아직 확인된 버전이 없습니다"
+
+#: rust
+msgid "{}: {} — the car has it"
+msgstr "{}: {} — 차량에 설치됨"
+
+#: rust
+msgid "{}: {} — the car has {}"
+msgstr "{}: {} — 차량 버전 {}"
+
+#: rust
+msgid "{}: {} — version in the car unknown"
+msgstr "{}: {} — 차량 버전 알 수 없음"
+
+#: rust
+msgid "MapStick: the update check did not run"
+msgstr "MapStick: 업데이트 확인이 실행되지 않았습니다"
+
+#: rust
+msgid "The background check for new map releases failed. Open MapStick once — it sets the check up again. Details: journalctl --user -u {}.service"
+msgstr "새 지도 버전의 백그라운드 확인에 실패했습니다. MapStick을 한 번 열면 확인 일정을 다시 설정합니다. 자세한 내용: journalctl --user -u {}.service"
+
+#: rust
+msgid "never"
+msgstr "안 함"
+
+#: ui/app.slint
+msgid "status report:"
+msgstr "상태 보고:"
+
+#: rust
+msgid "The background check has not run yet."
+msgstr "백그라운드 확인이 아직 실행되지 않았습니다."
+
+#: rust
+msgid "The background check has not run since {} — the schedule was set up again now; if this stays, see the system log."
+msgstr "백그라운드 확인이 {} 이후 실행되지 않았습니다 — 방금 일정을 다시 설정했습니다. 계속되면 시스템 로그를 확인하세요."
+
+#: rust
+msgid "Last background check: {} — failed: {}."
+msgstr "마지막 백그라운드 확인: {} — 실패: {}."
+
+#: rust
+msgid "Last background check: {}."
+msgstr "마지막 백그라운드 확인: {}."
+
+#: rust
+msgid "The background check will report {} that it works."
+msgstr "백그라운드 확인이 {} 작동 중임을 알립니다."
+
+#: rust
+msgid "No status reports — only an alarm when the check stops working."
+msgstr "상태 보고 없음 — 확인이 멈추면 경고만 표시합니다."

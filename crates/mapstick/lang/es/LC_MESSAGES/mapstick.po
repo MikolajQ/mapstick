@@ -623,3 +623,95 @@ msgstr "{} falló: {}"
 #: rust
 msgid "cancelled in the permission prompt"
 msgstr "cancelado en la ventana de permisos"
+
+#: rust
+msgid "The maker’s service did not answer within {} seconds."
+msgstr "El servicio del fabricante no respondió en {} segundos."
+
+#: rust
+msgid "MapStick cannot check for new releases"
+msgstr "MapStick no puede comprobar si hay nuevas versiones"
+
+#: rust
+msgid "MapStick is watching {}"
+msgstr "MapStick vigila {}"
+
+#: rust
+msgid "No answer from the maker since {}. Last error: {}. I keep trying every day."
+msgstr "Sin respuesta del fabricante desde {}. Último error: {}. Sigo intentándolo cada día."
+
+#: rust
+msgid "No answer from the maker yet. Last error: {}. I keep trying every day."
+msgstr "Aún no hay respuesta del fabricante. Último error: {}. Sigo intentándolo cada día."
+
+#: rust
+msgid "Last answer from the maker: {}."
+msgstr "Última respuesta del fabricante: {}."
+
+#: rust
+msgid "No answer from the maker yet."
+msgstr "Aún no hay respuesta del fabricante."
+
+#: rust
+msgid "Status reports: {}."
+msgstr "Informes de estado: {}."
+
+#: rust
+msgid "the check did not run"
+msgstr "la comprobación no se ejecutó"
+
+#: rust
+msgid "{}: no release seen yet"
+msgstr "{}: aún no se ha visto ninguna versión"
+
+#: rust
+msgid "{}: {} — the car has it"
+msgstr "{}: {} — el coche ya la tiene"
+
+#: rust
+msgid "{}: {} — the car has {}"
+msgstr "{}: {} — el coche tiene {}"
+
+#: rust
+msgid "{}: {} — version in the car unknown"
+msgstr "{}: {} — versión del coche desconocida"
+
+#: rust
+msgid "MapStick: the update check did not run"
+msgstr "MapStick: la comprobación de actualizaciones no se ejecutó"
+
+#: rust
+msgid "The background check for new map releases failed. Open MapStick once — it sets the check up again. Details: journalctl --user -u {}.service"
+msgstr "La comprobación en segundo plano de nuevos mapas ha fallado. Abra MapStick una vez — volverá a configurar la comprobación. Detalles: journalctl --user -u {}.service"
+
+#: rust
+msgid "never"
+msgstr "nunca"
+
+#: ui/app.slint
+msgid "status report:"
+msgstr "informe de estado:"
+
+#: rust
+msgid "The background check has not run yet."
+msgstr "La comprobación en segundo plano aún no se ha ejecutado."
+
+#: rust
+msgid "The background check has not run since {} — the schedule was set up again now; if this stays, see the system log."
+msgstr "La comprobación en segundo plano no se ejecuta desde {} — la programación se acaba de volver a configurar; si sigue así, revise el registro del sistema."
+
+#: rust
+msgid "Last background check: {} — failed: {}."
+msgstr "Última comprobación en segundo plano: {} — falló: {}."
+
+#: rust
+msgid "Last background check: {}."
+msgstr "Última comprobación en segundo plano: {}."
+
+#: rust
+msgid "The background check will report {} that it works."
+msgstr "La comprobación en segundo plano avisará {} de que funciona."
+
+#: rust
+msgid "No status reports — only an alarm when the check stops working."
+msgstr "Sin informes de estado — solo una alerta si la comprobación deja de funcionar."

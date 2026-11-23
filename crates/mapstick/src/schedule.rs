@@ -136,57 +136,146 @@ mod linux {
         Ok(())
     }
 
-    fn write_units(interval: Interval) -> Result<()> {
+    /// Napis w postaci, którą systemd przyjmie jako jeden argument
+    /// `ExecStart=` bez niespodzianek: w cudzysłowie (spacje w ścieżce),
+    /// z podwojonymi `%` (specyfikatory) i `$` (zmienne środowiska).
+    pub(super) fn unit_quoted(text: &str) -> String {
+        let escaped = text
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('%', "%%")
+            .replace('$', "$$");
+
+        format!("\"{escaped}\"")
+    }
+
+    /// Jednostka, którą systemd uruchamia, gdy samo sprawdzanie zawiedzie.
+    fn failure_unit() -> String {
+        format!("{NAME}-awaria.service")
+    }
+
+    /// Treść wszystkich trzech jednostek, z nazwami plików.
+    ///
+    /// Napisy w jednostkach są po angielsku, jak to w plikach systemd; po
+    /// polsku zostaje tylko powiadomienie, które ktoś ma przeczytać.
+    fn units() -> Result<[(String, String); 3]> {
+        let exe = unit_quoted(&binary()?.to_string_lossy());
+        let failure = failure_unit();
+
+        let service = format!(
+            "[Unit]\n\
+             Description=MapStick: check for new map releases\n\
+             Documentation=https://github.com/MikolajQ/mapstick\n\
+             # MapStick cannot report a run that never started (program gone,\n\
+             # crashed or hung). This unit does it instead.\n\
+             OnFailure={failure}\n\
+             \n\
+             [Service]\n\
+             Type=oneshot\n\
+             ExecStart={exe} --sprawdz\n\
+             # Each request has its own 90 s limit; this is only the safety net.\n\
+             TimeoutStartSec=15min\n\
+             # A window opened from the notification belongs to the user now,\n\
+             # it must not go away when this service ends.\n\
+             KillMode=process\n"
+        );
+
+        // Powiadomienie wysyła busctl, nie MapStick: ta jednostka ma działać
+        // właśnie wtedy, gdy MapSticka nie da się uruchomić. busctl jest
+        // częścią systemd, więc jest wszędzie tam, gdzie ten plik ma sens.
+        let summary = unit_quoted(&tr!("MapStick: the update check did not run"));
+        let body = unit_quoted(&tr!(
+            "The background check for new map releases failed. Open MapStick once — \
+             it sets the check up again. Details: journalctl --user -u {}.service",
+            NAME
+        ));
+        let alarm = format!(
+            "[Unit]\n\
+             Description=MapStick: report that the update check failed\n\
+             \n\
+             [Service]\n\
+             Type=oneshot\n\
+             ExecStart=busctl --user call org.freedesktop.Notifications \
+             /org/freedesktop/Notifications org.freedesktop.Notifications Notify \
+             susssasa{{sv}}i MapStick 0 dialog-warning {summary} {body} 0 0 0\n"
+        );
+
+        let timer = "[Unit]\n\
+             Description=MapStick: daily check for new map releases\n\
+             \n\
+             [Timer]\n\
+             # Daily: MapStick itself decides whether to ask the maker today.\n\
+             OnCalendar=daily\n\
+             # Catch up on a run missed while the computer was off.\n\
+             Persistent=true\n\
+             # An hour of slack, so not everyone asks the service at the same minute.\n\
+             RandomizedDelaySec=1h\n\
+             \n\
+             [Install]\n\
+             WantedBy=timers.target\n"
+            .to_owned();
+
+        Ok([
+            (format!("{NAME}.service"), service),
+            (failure, alarm),
+            (format!("{NAME}.timer"), timer),
+        ])
+    }
+
+    fn write_units() -> Result<()> {
         let directory = unit_dir();
         std::fs::create_dir_all(&directory)
             .with_context(|| tr!("Could not create {}", directory.display()))?;
 
-        let service = format!(
-            "[Unit]\n\
-             Description=MapStick — sprawdzenie nowych wydań map\n\
-             Documentation=https://github.com/MikolajQ/mapstick\n\
-             \n\
-             [Service]\n\
-             Type=oneshot\n\
-             ExecStart={} --sprawdz\n\
-             # Okno otwarte z powiadomienia należy już do użytkownika, nie do\n\
-             # tej usługi — bez tego zniknęłoby razem z jej zakończeniem.\n\
-             KillMode=process\n",
-            binary()?.display()
-        );
-
-        let timer = format!(
-            "[Unit]\n\
-             Description=MapStick — sprawdzanie nowych wydań map (pytania {}, przypomnienia codziennie)\n\
-             \n\
-             [Timer]\n\
-             # Codziennie: o tym, czy dziś pytać producenta, decyduje sama aplikacja.\n\
-             OnCalendar=daily\n\
-             # Nadrabia budzenie przegapione przy wyłączonym komputerze.\n\
-             Persistent=true\n\
-             # Godzina luzu, żeby wszyscy nie pytali serwisu o tej samej minucie.\n\
-             RandomizedDelaySec=1h\n\
-             \n\
-             [Install]\n\
-             WantedBy=timers.target\n",
-            interval.label()
-        );
-
-        std::fs::write(directory.join(format!("{NAME}.service")), service)?;
-        std::fs::write(directory.join(format!("{NAME}.timer")), timer)?;
+        for (name, text) in units()? {
+            let path = directory.join(name);
+            std::fs::write(&path, text)
+                .with_context(|| tr!("Could not write {}", path.display()))?;
+        }
 
         Ok(())
     }
 
-    fn install_systemd(interval: Interval) -> Result<()> {
-        write_units(interval)?;
+    /// Czy w systemie stoi dokładnie to, co byśmy założyli — wtedy nie ma po
+    /// co ruszać ani plików, ani systemctl, ani crontaba. Okno sprawdza to przy
+    /// każdym starcie, więc tanio: odczyt trzech małych plików i dwa pytania
+    /// do systemctl zamiast ośmiu wywołań.
+    fn systemd_in_place() -> bool {
+        let Ok(units) = units() else {
+            return false;
+        };
+        let directory = unit_dir();
+
+        let files_match = units.iter().all(|(name, text)| {
+            std::fs::read_to_string(directory.join(name)).is_ok_and(|t| t == *text)
+        });
+
+        let timer = format!("{NAME}.timer");
+        let asks = |what: &str| {
+            Command::new("systemctl")
+                .args(["--user", what, "--quiet", &timer])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok_and(|s| s.success())
+        };
+
+        files_match && asks("is-enabled") && asks("is-active")
+    }
+
+    fn install_systemd() -> Result<()> {
+        write_units()?;
         systemctl(&["daemon-reload"])?;
         systemctl(&["enable", "--now", &format!("{NAME}.timer")])
     }
 
     /// Wiersz crona z naszym znacznikiem — po nim poznajemy swoje wpisy.
     fn cron_line(_interval: Interval) -> Result<String> {
-        Ok(format!("@daily {} --sprawdz # {NAME}", binary()?.display()))
+        // Cron oddaje wiersz powłoce, a `%` zamienia na nową linię — stąd
+        // apostrofy i `\%`.
+        let exe = binary()?.to_string_lossy().replace('\'', "'\\''").replace('%', "\\%");
+
+        Ok(format!("@daily '{exe}' --sprawdz # {NAME}"))
     }
 
     fn crontab_read() -> Option<String> {
@@ -239,6 +328,18 @@ mod linux {
         crontab_write(&text)
     }
 
+    /// Ścieżka jako jeden argument `Exec=` pliku `.desktop`.
+    fn desktop_quoted(text: &str) -> String {
+        let escaped = text
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('`', "\\`")
+            .replace('$', "\\$")
+            .replace('%', "%%");
+
+        format!("\"{escaped}\"")
+    }
+
     fn install_autostart(interval: Interval) -> Result<()> {
         let path = autostart_file();
         if let Some(parent) = path.parent() {
@@ -255,7 +356,7 @@ mod linux {
              NoDisplay=true\n\
              X-GNOME-Autostart-enabled=true\n",
             interval.label(),
-            binary()?.display()
+            desktop_quoted(&binary()?.to_string_lossy())
         );
 
         std::fs::write(&path, desktop)
@@ -266,12 +367,16 @@ mod linux {
 
     /// Zakłada harmonogram najlepszą dostępną drogą.
     pub fn install(interval: Interval) -> Result<Kind> {
+        if systemd_in_place() {
+            return Ok(Kind::Systemd);
+        }
+
         // Zaczynamy od czystego stanu: przy zmianie odstępu albo po zmianie
         // dostępnych dróg nie chcemy dwóch wyzwalaczy naraz.
         let _ = remove();
 
         if systemd_available() {
-            match install_systemd(interval) {
+            match install_systemd() {
                 Ok(()) => return Ok(Kind::Systemd),
                 Err(e) => tracing::warn!("Timer systemd nie wyszedł: {e}"),
             }
@@ -295,6 +400,7 @@ mod linux {
         let directory = unit_dir();
         let _ = std::fs::remove_file(directory.join(format!("{NAME}.timer")));
         let _ = std::fs::remove_file(directory.join(format!("{NAME}.service")));
+        let _ = std::fs::remove_file(directory.join(failure_unit()));
 
         if systemd_available() {
             let _ = systemctl(&["daemon-reload"]);
@@ -615,5 +721,21 @@ mod other {
 
     pub fn current() -> Option<Kind> {
         None
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod linux_tests {
+    use super::linux::unit_quoted;
+
+    /// Ścieżka ze spacją, procentem i dolarem przechodzi przez `ExecStart=`
+    /// jako jeden, dosłowny argument.
+    #[test]
+    fn unit_paths_survive_systemd_parsing() {
+        assert_eq!(
+            unit_quoted("/home/Jan Kowalski/100% $HOME/mapstick"),
+            "\"/home/Jan Kowalski/100%% $$HOME/mapstick\""
+        );
+        assert_eq!(unit_quoted(r#"a"b\c"#), r#""a\"b\\c""#);
     }
 }
