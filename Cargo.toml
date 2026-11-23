@@ -9,3 +9,10 @@ edition = "2024"
 repository = "https://github.com/MikolajQ/mapstick"
 publish = false
 rust-version = "1.88.0"
+
+# Binarka idzie do ludzi: bez symboli waży około połowy, a cienkie LTO
+# wycina kod zależności, którego nikt nie woła. codegen-units zostaje
+# domyślne — przy jednym budowanie Slinta trwa kilka razy dłużej.
+[profile.release]
+strip = true
+lto = "thin"

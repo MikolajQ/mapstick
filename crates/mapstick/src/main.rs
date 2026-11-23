@@ -112,7 +112,11 @@ enum Cmd {
     /// Odnośnik ze strony producenta, kliknięty przez użytkownika.
     OpenLink(String),
     /// Świeżo zebrane odnośniki z katalogu producenta.
-    LinksCollected(Vec<(String, link::Target)>),
+    /// Zebrane odnośniki i marki z regionami, które odpowiedziały.
+    LinksCollected {
+        found: Vec<(String, link::Target)>,
+        combos: Vec<(String, String)>,
+    },
     /// Kopiowanie dobiegło końca — także przerwane albo nieudane.
     /// `forget` niesie model, którego dane zniknęły z dysku.
     CopyEnded { forget: Option<String> },
@@ -2522,7 +2526,12 @@ impl Worker {
 
         self.link_table = link::Table::load();
         tracing::info!("Tablica odnośników: {} wpisów", self.link_table.links.len());
-        self.spawn_link_refresh(self.combos_in_use());
+        let stale: Vec<_> = self
+            .combos_in_use()
+            .into_iter()
+            .filter(|(brand, region)| !self.link_table.is_fresh(brand, region))
+            .collect();
+        self.spawn_link_refresh(stale);
 
         if !restore {
             return;
@@ -2587,23 +2596,34 @@ impl Worker {
 
         tokio::spawn(async move {
             let mut found = Vec::new();
+            let mut answered = Vec::new();
 
             for (brand, region) in combos {
                 let code = BRANDS[brand_index(&brand)].as_code_str();
 
                 match link::collect(&brand, code, &region).await {
-                    Ok(mut links) => found.append(&mut links),
+                    Ok(mut links) => {
+                        found.append(&mut links);
+                        answered.push((brand, region));
+                    }
                     Err(e) => tracing::warn!("Odnośniki {brand}/{region}: {e}"),
                 }
             }
 
-            if !found.is_empty() {
-                let _ = tx.send(Cmd::LinksCollected(found));
+            if !answered.is_empty() {
+                let _ = tx.send(Cmd::LinksCollected {
+                    found,
+                    combos: answered,
+                });
             }
         });
     }
 
-    fn apply_links(&mut self, found: Vec<(String, link::Target)>) {
+    fn apply_links(&mut self, found: Vec<(String, link::Target)>, combos: &[(String, String)]) {
+        for (brand, region) in combos {
+            self.link_table.mark_refreshed(brand, region);
+        }
+
         let added = self.link_table.merge(found);
         tracing::info!(
             "Tablica odnośników: {} wpisów ({added} nowych)",
@@ -2650,7 +2670,7 @@ impl Worker {
 
         for region in &regions {
             match link::collect(brand, code, region).await {
-                Ok(found) => self.apply_links(found),
+                Ok(found) => self.apply_links(found, &[(brand.to_owned(), region.clone())]),
                 Err(e) => tracing::warn!("Odnośniki {brand}/{region}: {e}"),
             }
 
@@ -2773,7 +2793,7 @@ impl Worker {
                 Cmd::OpenFavourite(id) => self.open_favourite(id).await,
                 Cmd::FavouritesRefreshed(versions) => self.apply_favourite_versions(versions),
                 Cmd::OpenLink(url) => self.open_link(url).await,
-                Cmd::LinksCollected(found) => self.apply_links(found),
+                Cmd::LinksCollected { found, combos } => self.apply_links(found, &combos),
                 Cmd::DownloadFinished(record) => {
                     self.record_download(*record);
                     self.refresh_space().await;
@@ -2922,7 +2942,11 @@ fn main() -> Result<()> {
     std::thread::Builder::new()
         .name("mapstick-net".to_owned())
         .spawn(move || {
+            // Dwa wątki wystarczą: sieć czeka, a ciężka praca nudl (rozpakowanie,
+            // sumy kontrolne) i tak idzie do puli blokującej. Domyślnie byłoby
+            // ich tyle, ile rdzeni — bezczynnych przez większość życia okna.
             let runtime = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
                 .enable_all()
                 .build()
                 .expect("Nie udało się uruchomić środowiska tokio");

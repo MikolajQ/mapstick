@@ -76,6 +76,19 @@ pub struct Target {
 pub struct Table {
     #[serde(default)]
     pub links: HashMap<String, Target>,
+    /// Kiedy ostatnio zebrano odnośniki marki w regionie (`hyundai/EU`).
+    #[serde(default)]
+    pub refreshed: HashMap<String, String>,
+}
+
+/// Jak długo zebrane odnośniki uchodzą za świeże przy starcie okna. Wydania
+/// map wychodzą co kilka miesięcy, a nieznany odnośnik i tak wywołuje
+/// zbieranie na żądanie — codzienne sto zapytań do cudzego serwisu przy
+/// każdym uruchomieniu nic by nie dodało.
+const FRESH_HOURS: i64 = 24;
+
+fn combo_key(brand: &str, region: &str) -> String {
+    format!("{brand}/{region}")
 }
 
 impl Table {
@@ -113,6 +126,22 @@ impl Table {
     }
 
     /// Dopisuje wynik zbierania, zastępując wpisy o tych samych odnośnikach.
+    /// Czy odnośniki tej marki w tym regionie zebrano niedawno.
+    pub fn is_fresh(&self, brand: &str, region: &str) -> bool {
+        self.refreshed
+            .get(&combo_key(brand, region))
+            .and_then(|t| t.parse::<jiff::Timestamp>().ok())
+            .is_some_and(|t| {
+                t + jiff::SignedDuration::from_hours(FRESH_HOURS) > jiff::Timestamp::now()
+            })
+    }
+
+    /// Zapisuje, że marka w regionie została właśnie zebrana.
+    pub fn mark_refreshed(&mut self, brand: &str, region: &str) {
+        self.refreshed
+            .insert(combo_key(brand, region), jiff::Timestamp::now().to_string());
+    }
+
     pub fn merge(&mut self, found: Vec<(String, Target)>) -> usize {
         let before = self.links.len();
 
@@ -165,6 +194,8 @@ const CONCURRENCY: usize = 8;
 pub async fn collect(brand: &str, code: &str, region: &str) -> Result<Vec<(String, Target)>> {
     let client = reqwest::Client::builder()
         .user_agent("MapStick")
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
         .build()
         .with_context(|| tr!("Could not create the HTTP client"))?;
 
@@ -188,43 +219,53 @@ pub async fn collect(brand: &str, code: &str, region: &str) -> Result<Vec<(Strin
 
     let mut found = Vec::new();
 
-    for batch in files.chunks(CONCURRENCY) {
-        let mut set = tokio::task::JoinSet::new();
+    // Okno przesuwne zamiast paczek: paczka czeka na swój najwolniejszy
+    // plik, a tu każdy zakończony od razu robi miejsce następnemu.
+    let mut pending = files.into_iter();
+    let mut set = tokio::task::JoinSet::new();
+    let spawn = |set: &mut tokio::task::JoinSet<_>, file: String| {
+        let client = client.clone();
+        set.spawn(async move {
+            let text = client.get(&file).send().await?.text().await?;
+            Ok::<_, reqwest::Error>(text)
+        });
+    };
 
-        for file in batch {
-            let (client, file) = (client.clone(), file.clone());
-            set.spawn(async move {
-                let text = client.get(&file).send().await?.text().await?;
-                Ok::<_, reqwest::Error>(text)
-            });
+    for file in pending.by_ref().take(CONCURRENCY) {
+        spawn(&mut set, file);
+    }
+
+    while let Some(joined) = set.join_next().await {
+        if let Some(file) = pending.next() {
+            spawn(&mut set, file);
         }
 
-        while let Some(joined) = set.join_next().await {
-            let Ok(Ok(text)) = joined else { continue };
+        let Ok(Ok(text)) = joined else { continue };
 
-            let Ok(info) = serde_json::from_str::<LatestInfo>(&text) else {
+        let Ok(info) = serde_json::from_str::<LatestInfo>(&text) else {
+            continue;
+        };
+
+        let name = info.name.unwrap_or_default();
+
+        for software in info.software {
+            let Some(links) = software.links else {
                 continue;
             };
 
-            let name = info.name.unwrap_or_default();
+            let target = Target {
+                brand: brand.to_owned(),
+                region: software.region.unwrap_or_else(|| region.to_owned()),
+                mcode: match &software.mcd {
+                    serde_json::Value::String(s) => s.clone(),
+                    other => other.to_string(),
+                },
+                name: name.clone(),
+                version: software.versions.first().cloned().unwrap_or_default(),
+            };
 
-            for software in info.software {
-                let Some(links) = software.links else { continue };
-
-                let target = Target {
-                    brand: brand.to_owned(),
-                    region: software.region.unwrap_or_else(|| region.to_owned()),
-                    mcode: match &software.mcd {
-                        serde_json::Value::String(s) => s.clone(),
-                        other => other.to_string(),
-                    },
-                    name: name.clone(),
-                    version: software.versions.first().cloned().unwrap_or_default(),
-                };
-
-                for link in links {
-                    found.push((link, target.clone()));
-                }
+            for link in links {
+                found.push((link, target.clone()));
             }
         }
     }
