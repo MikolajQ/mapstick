@@ -715,3 +715,15 @@ msgstr "La comprobación en segundo plano avisará {} de que funciona."
 #: rust
 msgid "No status reports — only an alarm when the check stops working."
 msgstr "Sin informes de estado — solo una alerta si la comprobación deja de funcionar."
+
+#: rust
+msgid "Pick a model first and wait for its size."
+msgstr "Elija primero un modelo y espere a que aparezca su tamaño."
+
+#: rust
+msgid "Downloaded {} of {}{} · unpacked {} of {}"
+msgstr "Descargado {} de {}{} · descomprimido {} de {}"
+
+#: rust
+msgid "Downloaded {} of {}{}"
+msgstr "Descargado {} de {}{}"

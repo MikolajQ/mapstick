@@ -715,3 +715,15 @@ msgstr "Die Hintergrundprüfung meldet sich {}, dass sie läuft."
 #: rust
 msgid "No status reports — only an alarm when the check stops working."
 msgstr "Keine Statusmeldungen — nur eine Warnung, wenn die Prüfung nicht mehr funktioniert."
+
+#: rust
+msgid "Pick a model first and wait for its size."
+msgstr "Wählen Sie zuerst ein Modell und warten Sie auf seine Größe."
+
+#: rust
+msgid "Downloaded {} of {}{} · unpacked {} of {}"
+msgstr "{} von {} heruntergeladen{} · {} von {} entpackt"
+
+#: rust
+msgid "Downloaded {} of {}{}"
+msgstr "{} von {} heruntergeladen{}"

@@ -1981,7 +1981,7 @@ impl Worker {
 
     fn start_download(&mut self) -> Result<()> {
         let (Some(index), Some(firmware)) = (self.selected, self.firmware.clone()) else {
-            return Err(anyhow!("Najpierw wybierz model i poczekaj na rozmiar."));
+            return Err(anyhow!(tr!("Pick a model first and wait for its size.")));
         };
         let output = self
             .output_dir
@@ -2126,8 +2126,8 @@ impl Worker {
                 // ściągania i rozpakowywania. Pasek liczy całą robotę,
                 // ale podpis nazywa każdą fazę z osobna.
                 let text = if pp_total > 0 {
-                    format!(
-                        "Pobrano {} z {}{} · rozpakowano {} z {}",
+                    tr!(
+                        "Downloaded {} of {}{} · unpacked {} of {}",
                         format_size(dl_done),
                         format_size(dl_total),
                         rate,
@@ -2135,8 +2135,8 @@ impl Worker {
                         format_size(pp_total)
                     )
                 } else {
-                    format!(
-                        "Pobrano {} z {}{}",
+                    tr!(
+                        "Downloaded {} of {}{}",
                         format_size(dl_done),
                         format_size(dl_total),
                         rate
@@ -2299,7 +2299,7 @@ impl Worker {
                     } else {
                         0.0
                     };
-                    let text = format!("{} z {}", format_size(done), format_size(total));
+                    let text = tr!("{} of {}", format_size(done), format_size(total));
 
                     let _ = painter.upgrade_in_event_loop(move |ui| {
                         ui.set_progress(fraction);

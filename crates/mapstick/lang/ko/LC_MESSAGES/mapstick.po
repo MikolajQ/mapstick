@@ -715,3 +715,15 @@ msgstr "백그라운드 확인이 {} 작동 중임을 알립니다."
 #: rust
 msgid "No status reports — only an alarm when the check stops working."
 msgstr "상태 보고 없음 — 확인이 멈추면 경고만 표시합니다."
+
+#: rust
+msgid "Pick a model first and wait for its size."
+msgstr "먼저 모델을 선택하고 크기가 표시될 때까지 기다리세요."
+
+#: rust
+msgid "Downloaded {} of {}{} · unpacked {} of {}"
+msgstr "다운로드 {} / {}{} · 압축 해제 {} / {}"
+
+#: rust
+msgid "Downloaded {} of {}{}"
+msgstr "다운로드 {} / {}{}"

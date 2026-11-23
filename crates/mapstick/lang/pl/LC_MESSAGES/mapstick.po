@@ -853,3 +853,15 @@ msgstr "Sprawdzanie w tle zamelduje {}, że działa."
 #: rust
 msgid "No status reports — only an alarm when the check stops working."
 msgstr "Bez meldunków — tylko alarm, gdy sprawdzanie przestanie działać."
+
+#: rust
+msgid "Pick a model first and wait for its size."
+msgstr "Najpierw wybierz model i poczekaj na jego rozmiar."
+
+#: rust
+msgid "Downloaded {} of {}{} · unpacked {} of {}"
+msgstr "Pobrano {} z {}{} · rozpakowano {} z {}"
+
+#: rust
+msgid "Downloaded {} of {}{}"
+msgstr "Pobrano {} z {}{}"
