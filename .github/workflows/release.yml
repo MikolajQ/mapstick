@@ -1,0 +1,109 @@
+name: Release
+
+# Na tag v* buduje paczki dla Linuksa i Windows i zakłada z nich WERSJĘ
+# ROBOCZĄ wydania. Publikuje człowiek, po obejrzeniu — nic nie wychodzi do
+# ludzi samo.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    # Najstarszy dostępny runner — binarka z glibc 2.35 ruszy też na
+    # starszych dystrybucjach niż ta, na której by ją zbudowano dziś.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libfontconfig1-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libinput-dev libudev-dev libwayland-dev libxkbcommon-dev
+
+      - name: Build
+        run: cargo build --release --locked -p mapstick
+
+      - name: Package
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          name="mapstick-$version-x86_64-linux"
+          mkdir -p "dist/$name/icons"
+          cp target/release/mapstick packaging/mapstick.desktop packaging/linux/install.sh \
+             README.md README.pl.md LICENSE "dist/$name/"
+          cp packaging/icons/mapstick.svg packaging/icons/mapstick-*.png "dist/$name/icons/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*.tar.gz
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: cargo build --release --locked -p mapstick
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = "$env:GITHUB_REF_NAME".TrimStart('v')
+          $name = "mapstick-$version-windows-x86_64"
+          New-Item -ItemType Directory -Force "dist/$name" | Out-Null
+          Copy-Item target/release/mapstick.exe, README.md, README.pl.md "dist/$name/"
+          Copy-Item LICENSE "dist/$name/LICENSE.txt"
+          Compress-Archive -Path "dist/$name/*" -DestinationPath "dist/$name.zip"
+
+      - name: Installer
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          $env:MAPSTICK_VERSION = "$env:GITHUB_REF_NAME".TrimStart('v')
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" packaging/windows/mapstick.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            dist/*.zip
+            dist/*-setup.exe
+
+  release:
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS
+
+      # Opis wydania to sekcja tej wersji z CHANGELOG.md.
+      - name: Release notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="## $version" '
+            index($0, v) == 1 { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          test -s notes.md
+
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --draft --title "MapStick ${GITHUB_REF_NAME#v}" --notes-file notes.md
