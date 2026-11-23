@@ -266,6 +266,9 @@ mod tests {
         messages.extend(crate::REGIONS.iter().map(|(_, label)| (*label).to_owned()));
 
         assert!(messages.len() > 50, "parser znalazł podejrzanie mało: {}", messages.len());
+        // Pusta tablica przepuściłaby wszystko — tak ten test raz przeszedł
+        // z dziewięcioma nieprzetłumaczonymi napisami.
+        assert!(TRANSLATIONS.len() >= 6, "wbudowanych języków: {}", TRANSLATIONS.len());
 
         let mut missing = Vec::new();
         for (language, table) in TRANSLATIONS {

@@ -25,7 +25,12 @@ fn main() {
 
     slint_build::compile_with_config("ui/app.slint", config).expect("Failed to compile Slint UI");
 
-    let lang_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(LANG_DIR);
+    // Zmienna z chwili uruchomienia, nie `env!` z chwili kompilacji skryptu:
+    // skompilowany skrypt bywa użyty ponownie z innego miejsca (wspólny
+    // katalog target dla dwóch kopii repozytorium) i szukałby tłumaczeń tam,
+    // gdzie ich już nie ma — po cichu, z pustą tablicą.
+    let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
+    let lang_dir = PathBuf::from(manifest_dir).join(LANG_DIR);
     println!("cargo:rerun-if-changed={}", lang_dir.display());
 
     let out = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR"));
@@ -49,6 +54,14 @@ fn generate(lang_dir: &Path) -> String {
             languages.insert(language, parse_po(&text));
         }
     }
+
+    // Bez tłumaczeń program i tak by się zbudował — mówiąc wszędzie po
+    // angielsku. Lepiej, żeby build padł od razu.
+    assert!(
+        !languages.is_empty(),
+        "Brak tłumaczeń w {} — build bez nich dałby program tylko po angielsku",
+        lang_dir.display()
+    );
 
     let mut code = String::from(
         "/// Tłumaczenia wbudowane z `lang/`. Wygenerowane przez build.rs.\n\
