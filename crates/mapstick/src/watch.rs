@@ -103,11 +103,15 @@ impl Report {
             return tr!("MapStick cannot check for new releases");
         }
 
-        tr!("MapStick is watching {}", count_phrase(self.watched))
+        tr!("Still watching for new map releases")
     }
 
     fn body(&self) -> String {
-        let mut body = match (&self.trouble, self.answered) {
+        // Sama liczba, bez rzeczownika: tłumaczenia nie znają form liczby
+        // mnogiej, a „2 modeli” razi bardziej niż „modele: 2”.
+        let mut body = tr!("Watched models: {}.", self.watched);
+        body.push(' ');
+        body += &match (&self.trouble, self.answered) {
             (Some(error), Some(at)) => tr!(
                 "No answer from the maker since {}. Last error: {}. I keep trying every day.",
                 local_time(at),
@@ -134,13 +138,6 @@ impl Report {
         }
 
         body
-    }
-}
-
-fn count_phrase(count: usize) -> String {
-    match count {
-        1 => tr!("1 model"),
-        n => tr!("{} models", n),
     }
 }
 

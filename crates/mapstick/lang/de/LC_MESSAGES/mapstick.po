@@ -217,12 +217,6 @@ msgstr "  ·  in der .ver-Datei vermerkt"
 msgid "  ·  we downloaded this"
 msgstr "  ·  das haben wir heruntergeladen"
 
-msgid "1 model"
-msgstr "1 Modell"
-
-msgid "{} models"
-msgstr "{} Modelle"
-
 msgid "Asking the maker {} (watched: {}); a new release is brought up daily — woken by {}."
 msgstr "Ich frage den Hersteller {} (beobachtet: {}); eine neue Version wird täglich in Erinnerung gerufen — geweckt von {}."
 
@@ -633,10 +627,6 @@ msgid "MapStick cannot check for new releases"
 msgstr "MapStick kann nicht nach neuen Versionen suchen"
 
 #: rust
-msgid "MapStick is watching {}"
-msgstr "MapStick überwacht {}"
-
-#: rust
 msgid "No answer from the maker since {}. Last error: {}. I keep trying every day."
 msgstr "Keine Antwort vom Hersteller seit {}. Letzter Fehler: {}. Ich versuche es weiterhin täglich."
 
@@ -779,3 +769,11 @@ msgstr "Die Website des Herstellers nennt für diese FIN mehr als ein Modell. W�
 #: rust
 msgid "Found by VIN: {} ({})."
 msgstr "Über die FIN gefunden: {} ({})."
+
+#: rust
+msgid "Still watching for new map releases"
+msgstr "Ich halte weiter Ausschau nach neuen Kartenversionen"
+
+#: rust
+msgid "Watched models: {}."
+msgstr "Beobachtete Modelle: {}."

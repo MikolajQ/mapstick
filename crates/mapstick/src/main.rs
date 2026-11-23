@@ -713,17 +713,12 @@ impl Worker {
             return String::new();
         }
 
-        let count_phrase = match watched {
-            1 => tr!("1 model"),
-            n => tr!("{} models", n),
-        };
-
         let schedule = match schedule::current() {
             Some(kind) => tr!(
                 "Asking the maker {} (watched: {}); a new release is brought up daily — \
                  woken by {}.",
                 i18n::tr(self.store.check_interval.label()),
-                count_phrase,
+                watched,
                 i18n::tr(kind.label())
             ),
             None => {
