@@ -317,9 +317,6 @@ msgstr "Gefundene Datenträger: {}."
 msgid "Could not detect media: {}"
 msgstr "Datenträger konnten nicht erkannt werden: {}"
 
-msgid "This medium is not mounted — plug it in again or mount it."
-msgstr "Dieser Datenträger ist nicht eingehängt — erneut anschließen oder einhängen."
-
 msgid "Formatting {} as exFAT…"
 msgstr "{} wird als exFAT formatiert…"
 
@@ -777,3 +774,23 @@ msgstr "Ich halte weiter Ausschau nach neuen Kartenversionen"
 #: rust
 msgid "Watched models: {}."
 msgstr "Beobachtete Modelle: {}."
+
+#: rust
+msgid "Mounting {}…"
+msgstr "{} wird eingehängt…"
+
+#: rust
+msgid "{} mounted at {}."
+msgstr "{} eingehängt unter {}."
+
+#: rust
+msgid "Could not mount {}: {}"
+msgstr "{} konnte nicht eingehängt werden: {}"
+
+#: rust
+msgid "{} · {}{}"
+msgstr "{} · {}{}"
+
+#: rust
+msgid "If the system was updated recently, restart the computer — the running kernel can no longer load its file system drivers."
+msgstr "Wenn das System kürzlich aktualisiert wurde, starten Sie den Computer neu — der laufende Kernel kann seine Dateisystemtreiber nicht mehr laden."

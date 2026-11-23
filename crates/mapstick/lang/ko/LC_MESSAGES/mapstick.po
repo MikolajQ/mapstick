@@ -317,9 +317,6 @@ msgstr "찾은 미디어: {}개."
 msgid "Could not detect media: {}"
 msgstr "미디어를 감지하지 못했습니다: {}"
 
-msgid "This medium is not mounted — plug it in again or mount it."
-msgstr "이 저장 장치가 마운트되지 않았습니다 — 다시 연결하거나 마운트하세요."
-
 msgid "Formatting {} as exFAT…"
 msgstr "{}을(를) exFAT로 포맷하는 중…"
 
@@ -777,3 +774,23 @@ msgstr "새 지도 버전을 계속 감시하고 있습니다"
 #: rust
 msgid "Watched models: {}."
 msgstr "감시 중인 모델: {}개."
+
+#: rust
+msgid "Mounting {}…"
+msgstr "{} 마운트 중…"
+
+#: rust
+msgid "{} mounted at {}."
+msgstr "{}을(를) {}에 마운트했습니다."
+
+#: rust
+msgid "Could not mount {}: {}"
+msgstr "{}을(를) 마운트할 수 없습니다: {}"
+
+#: rust
+msgid "{} · {}{}"
+msgstr "{} · {}{}"
+
+#: rust
+msgid "If the system was updated recently, restart the computer — the running kernel can no longer load its file system drivers."
+msgstr "최근에 시스템을 업데이트했다면 컴퓨터를 다시 시작하세요 — 실행 중인 커널이 파일 시스템 드라이버를 더 이상 불러올 수 없습니다."

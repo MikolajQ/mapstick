@@ -1247,13 +1247,13 @@ impl Worker {
     /// „Skopiuj na nośnik”, ale odbierało to użytkownikowi wybór, którego
     /// właśnie dokonał. Miejsce kopiowania wskazuje teraz
     /// [`Worker::copy_destination`] i cel pobierania nie musi go udawać.
-    fn adopt_single_medium(&mut self) {
-        if self.media.len() != 1 || self.media[0].mount_point.is_none() {
+    async fn adopt_single_medium(&mut self) {
+        if self.media.len() != 1 {
             return;
         }
 
         if self.output_dir.is_none() {
-            self.select_medium(0);
+            self.select_medium(0).await;
         }
     }
 
@@ -1705,16 +1705,26 @@ impl Worker {
                     .map(|s| format_size(s.bytes))
                     .unwrap_or_default();
 
-                let details = tr!(
-                    "{} · free {} of {}{}",
-                    m.filesystem.as_deref().unwrap_or(i18n::tr("no file system")),
-                    format_size(m.free_bytes),
-                    format_size(m.total_bytes),
-                    m.connection
-                        .as_deref()
-                        .map(|c| format!(" · {c}"))
-                        .unwrap_or_default(),
-                );
+                let filesystem = m.filesystem.as_deref().unwrap_or(i18n::tr("no file system"));
+                let connection = m
+                    .connection
+                    .as_deref()
+                    .map(|c| format!(" · {c}"))
+                    .unwrap_or_default();
+
+                // Wolne miejsce zna tylko zamontowany system plików — przy
+                // niezamontowanym „wolne 0 B” wyglądałoby na pełny nośnik.
+                let details = if m.mount_point.is_some() {
+                    tr!(
+                        "{} · free {} of {}{}",
+                        filesystem,
+                        format_size(m.free_bytes),
+                        format_size(m.total_bytes),
+                        connection,
+                    )
+                } else {
+                    tr!("{} · {}{}", filesystem, format_size(m.total_bytes), connection)
+                };
 
                 tracing::info!("{}: {status}", m.id);
 
@@ -1776,7 +1786,7 @@ impl Worker {
                     // Jeden podłączony nośnik to jedyny sensowny cel. Bez tego
                     // „Pobierz” zostaje wyszarzony, a jedyną podpowiedzią jest
                     // kliknięcie w wiersz, który wcale nie wygląda na klikalny.
-                    self.adopt_single_medium();
+                    self.adopt_single_medium().await;
                 }
             }
             Err(e) => {
@@ -1836,16 +1846,22 @@ impl Worker {
         }
     }
 
-    fn select_medium(&mut self, index: usize) {
-        let Some(medium) = self.media.get(index) else {
+    async fn select_medium(&mut self, index: usize) {
+        let Some(medium) = self.media.get(index).cloned() else {
             return;
         };
-        let Some(mount) = medium.mount_point.clone() else {
-            self.set_status(
-                tr!("This medium is not mounted — plug it in again or mount it."),
-                true,
-            );
-            return;
+
+        let (mount, index) = match medium.mount_point.clone() {
+            Some(mount) => (mount, index),
+            None => match self.mount_medium(&medium).await {
+                // Po montowaniu lista jest odczytana na nowo — numer wiersza
+                // bierzemy z niej, a nie sprzed montowania.
+                Some(mount) => {
+                    let index = self.media.iter().position(|m| m.id == medium.id).unwrap_or(index);
+                    (mount, index)
+                }
+                None => return,
+            },
         };
 
         self.forget_pause();
@@ -1861,6 +1877,42 @@ impl Worker {
         });
 
         self.push_target_state();
+    }
+
+    /// Montuje nośnik, którego nie zamontował pulpit, i odczytuje listę na
+    /// nowo — dopiero zamontowany pokazuje wolne miejsce i plik `.ver`.
+    async fn mount_medium(&mut self, medium: &Medium) -> Option<PathBuf> {
+        let label = medium_label(medium);
+        self.set_status(tr!("Mounting {}…", label), false);
+
+        match mapstick_media::mount(medium).await {
+            Ok(point) => {
+                if let Ok(media) = mapstick_media::list_media().await {
+                    self.media = media;
+                    self.learn_installed_from_media();
+                    self.push_media_rows();
+                }
+                self.set_status(tr!("{} mounted at {}.", label, point.display()), false);
+                Some(point)
+            }
+            Err(e) => {
+                let reason = describe(&e);
+
+                // Częste na Archu i pochodnych: po aktualizacji jądra moduły
+                // działającego jądra znikają z dysku, a z nimi exFAT.
+                let hint = if reason.contains("not configured in kernel") {
+                    format!(
+                        " {}",
+                        tr!("If the system was updated recently, restart the computer — the running kernel can no longer load its file system drivers.")
+                    )
+                } else {
+                    String::new()
+                };
+
+                self.set_status(tr!("Could not mount {}: {}", label, reason) + &hint, true);
+                None
+            }
+        }
     }
 
     fn request_format(&mut self, index: usize) {
@@ -2965,7 +3017,7 @@ impl Worker {
                 }
                 Cmd::GoBack => self.with_ui(|ui| ui.set_page(0)),
                 Cmd::RefreshMedia => self.refresh_media().await,
-                Cmd::SelectMedium(i) => self.select_medium(i),
+                Cmd::SelectMedium(i) => self.select_medium(i).await,
                 Cmd::RemoveStale(i) => {
                     self.remove_stale(i);
                     self.refresh_media().await;

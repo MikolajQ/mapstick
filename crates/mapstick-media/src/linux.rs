@@ -286,6 +286,37 @@ pub async fn format_exfat(medium: &Medium, label: &str) -> Result<()> {
     Ok(())
 }
 
+/// Montuje nośnik, którego nie zamontował pulpit, i zwraca punkt montowania.
+///
+/// Na lekkich pulpitach (sam menedżer okien, bez automontowania) podłączony
+/// pendrive stoi niezamontowany, a bez tego jedyną radą było „zamontuj go
+/// sam”. udisks2 montuje nośniki wymienne zalogowanemu użytkownikowi bez
+/// hasła — tak samo, jak robi to menedżer plików. Montujemy wyłącznie to, co
+/// przeszło sprawdzenie bezpieczeństwa na świeżej liście.
+pub async fn mount(medium: &Medium) -> Result<PathBuf> {
+    let current = list_media().await?;
+    let Some(fresh) = current.iter().find(|m| m.id == medium.id) else {
+        return Err(Error::SystemDisk(medium.id.clone()));
+    };
+
+    if let Some(point) = &fresh.mount_point {
+        return Ok(point.clone());
+    }
+
+    let connection = Connection::system().await.map_err(backend)?;
+    let filesystem = FilesystemProxy::builder(&connection)
+        .path(block_path(&medium.id)?)
+        .map_err(backend)?
+        .build()
+        .await
+        .map_err(backend)?;
+
+    let point = filesystem.mount(HashMap::new()).await.map_err(service)?;
+    tracing::info!("Zamontowano {} w {point}", medium.id);
+
+    Ok(PathBuf::from(point))
+}
+
 /// Odmontowuje, godząc się z tym, że nośnik mógł nie być zamontowany.
 async fn unmount(filesystem: &FilesystemProxy<'_>) -> Result<()> {
     match filesystem.unmount(HashMap::new()).await {

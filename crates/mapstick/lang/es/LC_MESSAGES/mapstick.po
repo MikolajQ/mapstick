@@ -317,9 +317,6 @@ msgstr "Soportes encontrados: {}."
 msgid "Could not detect media: {}"
 msgstr "No se pudieron detectar los soportes: {}"
 
-msgid "This medium is not mounted — plug it in again or mount it."
-msgstr "Este soporte no está montado — vuelva a conectarlo o móntelo."
-
 msgid "Formatting {} as exFAT…"
 msgstr "Formateando {} como exFAT…"
 
@@ -777,3 +774,23 @@ msgstr "Sigo vigilando nuevas versiones de mapas"
 #: rust
 msgid "Watched models: {}."
 msgstr "Modelos vigilados: {}."
+
+#: rust
+msgid "Mounting {}…"
+msgstr "Montando {}…"
+
+#: rust
+msgid "{} mounted at {}."
+msgstr "{} montado en {}."
+
+#: rust
+msgid "Could not mount {}: {}"
+msgstr "No se pudo montar {}: {}"
+
+#: rust
+msgid "{} · {}{}"
+msgstr "{} · {}{}"
+
+#: rust
+msgid "If the system was updated recently, restart the computer — the running kernel can no longer load its file system drivers."
+msgstr "Si el sistema se actualizó hace poco, reinicie el ordenador — el núcleo en ejecución ya no puede cargar sus controladores de sistemas de archivos."

@@ -254,6 +254,23 @@ pub async fn format_exfat(medium: &Medium, label: &str) -> Result<()> {
     }
 }
 
+/// Montuje nośnik z listy i zwraca punkt montowania; zamontowany zwraca od
+/// razu. Na Windows każdy wolumen z listy ma już literę, więc nie ma czego
+/// montować.
+pub async fn mount(medium: &Medium) -> Result<PathBuf> {
+    #[cfg(target_os = "linux")]
+    {
+        backend::mount(medium).await
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        medium
+            .mount_point
+            .clone()
+            .ok_or_else(|| Error::NotMounted(medium.id.clone()))
+    }
+}
+
 /// Wolne i całkowite miejsce w podanym katalogu.
 pub fn space_for(path: &Path) -> Result<Space> {
     #[cfg(any(target_os = "linux", windows))]

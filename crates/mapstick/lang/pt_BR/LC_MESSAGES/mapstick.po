@@ -317,9 +317,6 @@ msgstr "Mídias encontradas: {}."
 msgid "Could not detect media: {}"
 msgstr "Não foi possível detectar mídias: {}"
 
-msgid "This medium is not mounted — plug it in again or mount it."
-msgstr "Esta mídia não está montada — conecte-a novamente ou monte-a."
-
 msgid "Formatting {} as exFAT…"
 msgstr "Formatando {} como exFAT…"
 
@@ -777,3 +774,23 @@ msgstr "Continuo acompanhando novas versões dos mapas"
 #: rust
 msgid "Watched models: {}."
 msgstr "Modelos acompanhados: {}."
+
+#: rust
+msgid "Mounting {}…"
+msgstr "Montando {}…"
+
+#: rust
+msgid "{} mounted at {}."
+msgstr "{} montado em {}."
+
+#: rust
+msgid "Could not mount {}: {}"
+msgstr "Não foi possível montar {}: {}"
+
+#: rust
+msgid "{} · {}{}"
+msgstr "{} · {}{}"
+
+#: rust
+msgid "If the system was updated recently, restart the computer — the running kernel can no longer load its file system drivers."
+msgstr "Se o sistema foi atualizado recentemente, reinicie o computador — o kernel em execução não consegue mais carregar os drivers de sistemas de arquivos."
