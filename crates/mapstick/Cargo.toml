@@ -38,3 +38,4 @@ tempfile = "3.10.1"
 
 [build-dependencies]
 slint-build = "~1.17.1"
+winresource = "0.1.23"

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- MapStick: a USB drive carrying a map pin. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14907C"/>
+      <stop offset="1" stop-color="#0A5348"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#bg)"/>
+  <!-- a road on the map, under the drive -->
+  <path d="M30 214 C 76 190, 70 150, 118 130 S 196 96, 228 44"
+        fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="12"
+        stroke-linecap="round" stroke-dasharray="2 22"/>
+  <!-- connector -->
+  <rect x="101" y="30" width="54" height="56" rx="7" fill="#D5E0DD"/>
+  <rect x="113" y="46" width="11" height="12" rx="2" fill="#7F9692"/>
+  <rect x="132" y="46" width="11" height="12" rx="2" fill="#7F9692"/>
+  <!-- body -->
+  <rect x="82" y="78" width="92" height="150" rx="24" fill="#FFFFFF"/>
+  <!-- map pin -->
+  <path d="M128 204 C 117 190, 97 166, 97 145 A 31 31 0 0 1 159 145 C 159 166, 139 190, 128 204 Z"
+        fill="#E8823A"/>
+  <circle cx="128" cy="144" r="12" fill="#FFFFFF"/>
+</svg>

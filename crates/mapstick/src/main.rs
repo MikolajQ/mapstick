@@ -3072,6 +3072,13 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    // Ta sama nazwa co plik `mapstick.desktop`: po niej kompozytor Wayland
+    // znajduje ikonę i nazwę aplikacji dla paska zadań.
+    #[cfg(target_os = "linux")]
+    if let Err(e) = slint::set_xdg_app_id("mapstick") {
+        tracing::debug!("Bez identyfikatora aplikacji: {e}");
+    }
+
     let ui = AppWindow::new()?;
 
     // Slint tłumaczy napisy z .slint po tym samym kodzie języka, którego

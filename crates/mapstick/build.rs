@@ -25,6 +25,19 @@ fn main() {
 
     slint_build::compile_with_config("ui/app.slint", config).expect("Failed to compile Slint UI");
 
+    // Ikona i opis pliku .exe — to, co Windows pokazuje w Eksploratorze,
+    // w menu Start i we właściwościach pliku. Skrypt biegnie na systemie
+    // budującym, więc o docelowym mówi zmienna, nie `cfg!`.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        let mut resource = winresource::WindowsResource::new();
+        resource
+            .set_icon("../../packaging/windows/mapstick.ico")
+            .set("FileDescription", "MapStick")
+            .set("ProductName", "MapStick")
+            .set("LegalCopyright", "GPL-3.0-only");
+        resource.compile().expect("Windows resources");
+    }
+
     // Zmienna z chwili uruchomienia, nie `env!` z chwili kompilacji skryptu:
     // skompilowany skrypt bywa użyty ponownie z innego miejsca (wspólny
     // katalog target dla dwóch kopii repozytorium) i szukałby tłumaczeń tam,
