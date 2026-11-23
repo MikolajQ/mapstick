@@ -41,6 +41,7 @@ mod instance;
 mod link;
 mod schedule;
 mod stale;
+mod vin;
 mod watch;
 
 slint::include_modules!();
@@ -103,6 +104,11 @@ enum Cmd {
     RequestRedownload,
     ConfirmRedownload,
     CancelRedownload,
+    /// Numer VIN wpisany w okno — jeszcze nieoczyszczony.
+    FindVin(String),
+    /// Wybór jednego z kilku pojazdów, które serwis przypisał do numeru.
+    ChooseVin(usize),
+    CancelVin,
     FavouritesRefreshed(Vec<FavouriteVersion>),
     DownloadFinished(Box<Download>),
     StartCopy,
@@ -111,7 +117,6 @@ enum Cmd {
     SetDeleteAfterCopy(bool),
     /// Odnośnik ze strony producenta, kliknięty przez użytkownika.
     OpenLink(String),
-    /// Świeżo zebrane odnośniki z katalogu producenta.
     /// Zebrane odnośniki i marki z regionami, które odpowiedziały.
     LinksCollected {
         found: Vec<(String, link::Target)>,
@@ -427,6 +432,8 @@ struct Worker {
     link_table: link::Table,
     /// Model do zaznaczenia po kodzie `mcode`, gdy przyjdzie z odnośnika.
     pending_mcode: Option<String>,
+    /// Kandydaci z wyszukiwania po VIN, czekający na wybór w oknie.
+    vin_choices: Vec<vin::Candidate>,
 }
 
 impl Worker {
@@ -456,6 +463,7 @@ impl Worker {
             delete_after_copy: false,
             link_table: link::Table::default(),
             pending_mcode: None,
+            vin_choices: Vec::new(),
         }
     }
 
@@ -1091,6 +1099,7 @@ impl Worker {
 
         if let Some(visible) = wanted {
             self.select(visible).await?;
+            self.with_ui(move |ui| ui.invoke_show_row(visible as i32));
         }
 
         Ok(())
@@ -2691,7 +2700,9 @@ impl Worker {
         );
     }
 
-    async fn open_target(&mut self, target: link::Target) {
+    /// Otwiera pojazd wskazany odnośnikiem albo VIN-em. Prawda, gdy model
+    /// jest w katalogu i został zaznaczony.
+    async fn open_target(&mut self, target: link::Target) -> bool {
         let (brand, region) = (brand_index(&target.brand), region_index(&target.region));
         let (b, r) = (brand as i32, region as i32);
 
@@ -2714,9 +2725,128 @@ impl Worker {
 
         if let Err(e) = self.load_models(brand, region).await {
             self.set_status(tr!("Could not fetch the list: {}", e), true);
+            self.set_busy(false);
+            return false;
         }
 
         self.set_busy(false);
+
+        // Strona producenta zna więcej pojazdów niż katalog pobrań — bez tego
+        // zdania kliknięcie albo VIN kończyłyby się listą bez zaznaczenia.
+        let found = self
+            .selected
+            .is_some_and(|i| self.entries[i].car.mcode == target.mcode);
+
+        if !found {
+            self.set_status(
+                tr!(
+                    "The maker lists {} ({}), but its software is not in the download \
+                     catalogue for this region.",
+                    target.name,
+                    target.version
+                ),
+                true,
+            );
+        }
+
+        found
+    }
+
+    /// Szuka pojazdu po numerze VIN na stronach producenta.
+    ///
+    /// Pytamy kolejno wszystkie trzy marki, bo z samego numeru marki nie da się
+    /// pewnie poznać, a nieznany numer to dla serwisu zwykła odpowiedź, nie błąd.
+    async fn find_vin(&mut self, input: String) {
+        let Some(vin) = vin::normalize(&input) else {
+            self.set_status(
+                tr!("A VIN has 17 characters: digits and letters other than I, O and Q."),
+                true,
+            );
+            return;
+        };
+
+        self.set_status(tr!("Looking the VIN up on the maker’s site…"), false);
+        self.set_busy(true);
+
+        let selected = BRAND_NAMES[self.brand_position()];
+        let region = self.region.clone();
+        let mut found = Vec::new();
+        let mut errors = Vec::new();
+
+        for brand in vin::brand_order(&vin, selected, BRAND_NAMES) {
+            let code = BRANDS[brand_index(brand)].as_code_str();
+
+            match within_time_limit(vin::search(brand, code, &region, &vin)).await {
+                Ok(Some(candidates)) if !candidates.is_empty() => {
+                    found = candidates;
+                    break;
+                }
+                Ok(_) => {}
+                Err(e) => errors.push(format!("{brand}: {}", e.root_cause())),
+            }
+        }
+
+        self.set_busy(false);
+
+        if found.is_empty() {
+            let message = if errors.is_empty() {
+                tr!(
+                    "The maker does not know this VIN in the region {}. Check the number, \
+                     or pick the model from the list.",
+                    region
+                )
+            } else {
+                tr!("Could not look the VIN up: {}", errors.join("; "))
+            };
+            self.set_status(message, true);
+            return;
+        }
+
+        // Odnośniki „Download” z odpowiedzi to darmowa nauka dla tablicy.
+        let links = found
+            .iter()
+            .flat_map(|c| c.links.iter().map(|l| (l.clone(), c.target.clone())))
+            .collect();
+        self.apply_links(links, &[]);
+
+        if let [only] = found.as_slice() {
+            let only = only.clone();
+            self.open_vin_candidate(only).await;
+            return;
+        }
+
+        let rows: Vec<VinChoice> = found
+            .iter()
+            .map(|c| VinChoice {
+                title: c.model.clone().into(),
+                details: format!("{} · {} · {}", c.platform, c.target.version, c.released).into(),
+            })
+            .collect();
+        self.vin_choices = found;
+
+        self.set_status(tr!("This VIN fits more than one model — pick yours."), false);
+        self.with_ui(move |ui| {
+            ui.set_vin_choices(ModelRc::new(VecModel::from(rows)));
+            ui.set_vin_dialog(true);
+        });
+    }
+
+    async fn choose_vin(&mut self, index: usize) {
+        self.with_ui(|ui| ui.set_vin_dialog(false));
+
+        let choices = std::mem::take(&mut self.vin_choices);
+        if let Some(candidate) = choices.into_iter().nth(index) {
+            self.open_vin_candidate(candidate).await;
+        }
+    }
+
+    async fn open_vin_candidate(&mut self, candidate: vin::Candidate) {
+        if self.open_target(candidate.target).await {
+            self.set_status(
+                tr!("Found by VIN: {} ({}).", candidate.model, candidate.platform),
+                false,
+            );
+        }
     }
 
     async fn open_favourite(&mut self, model_id: String) {
@@ -2854,6 +2984,12 @@ impl Worker {
                 Cmd::CancelRedownload => {
                     self.with_ui(|ui| ui.set_redownload_dialog(false));
                 }
+                Cmd::FindVin(text) => self.find_vin(text).await,
+                Cmd::ChooseVin(index) => self.choose_vin(index).await,
+                Cmd::CancelVin => {
+                    self.vin_choices.clear();
+                    self.with_ui(|ui| ui.set_vin_dialog(false));
+                }
             }
         }
     }
@@ -2969,6 +3105,11 @@ fn main() -> Result<()> {
 
     if let Some(message) = message {
         let _ = tx.send(incoming(message));
+    }
+
+    // MAPSTICK_DEV_VIN wpisuje numer w pole VIN i naciska „Szukaj”.
+    if let Ok(vin) = std::env::var("MAPSTICK_DEV_VIN") {
+        let _ = tx.send(Cmd::FindVin(vin));
     }
 
     if let Ok(stage @ ("lista" | "nosnik")) = std::env::var("MAPSTICK_DEV").as_deref() {
@@ -3336,6 +3477,23 @@ fn wire_callbacks(ui: &AppWindow, tx: UnboundedSender<Cmd>) {
     let t = tx.clone();
     ui.on_cancel_redownload(move || {
         let _ = t.send(Cmd::CancelRedownload);
+    });
+
+    let t = tx.clone();
+    ui.on_find_vin(move |text| {
+        let _ = t.send(Cmd::FindVin(text.to_string()));
+    });
+
+    let t = tx.clone();
+    ui.on_choose_vin(move |index| {
+        if index >= 0 {
+            let _ = t.send(Cmd::ChooseVin(index as usize));
+        }
+    });
+
+    let t = tx.clone();
+    ui.on_cancel_vin(move || {
+        let _ = t.send(Cmd::CancelVin);
     });
 
     let t = tx.clone();

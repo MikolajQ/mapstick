@@ -11,6 +11,12 @@ export struct ModelRow {
     released: string,
 }
 
+/// Jeden z pojazdów, które serwis przypisał do numeru VIN.
+export struct VinChoice {
+    title: string,
+    details: string,
+}
+
 export struct FavouriteRow {
     model_id: string,
     label: string,
@@ -234,6 +240,10 @@ export component AppWindow inherits Window {
     in property <string> format-target;
     in property <bool> formatting: false;
 
+    // --- wybór pojazdu po VIN, gdy pasuje kilka ---
+    in property <bool> vin-dialog: false;
+    in property <[VinChoice]> vin-choices;
+
     // --- potwierdzenie ponownego pobrania ---
     in property <bool> redownload-dialog: false;
     /// Co zniknie z katalogu docelowego: ile plików i ile miejsca.
@@ -267,6 +277,21 @@ export component AppWindow inherits Window {
     callback set-report(int);
     callback set-installed(int);
     callback open-favourite(string);
+    callback find-vin(string);
+
+    /// Przewija listę modeli tak, żeby wiersz stał mniej więcej na środku.
+    /// Wołane tylko przy wyborze z zewnątrz — z ulubionych, odnośnika, VIN
+    /// albo przy odtwarzaniu — bo kliknięty wiersz i tak jest na widoku.
+    /// Lista siedzi w widoku warunkowym, więc nie da się jej przewinąć stąd
+    /// wprost: prośba idzie przez licznik, który lista obserwuje.
+    public function show-row(index: int) {
+        root.scroll-row = index;
+        root.scroll-serial += 1;
+    }
+    property <int> scroll-row: -1;
+    property <int> scroll-serial: 0;
+    callback choose-vin(int);
+    callback cancel-vin();
 
     VerticalBox {
         padding: 16px;
@@ -383,6 +408,19 @@ export component AppWindow inherits Window {
                     font-size: 12px;
                     opacity: 0.7;
                 }
+
+                // VIN to skrót, nie jedyna droga — stoi z boku listy, a nie
+                // zamiast niej.
+                vin-edit := LineEdit {
+                    width: 230px;
+                    placeholder-text: @tr("VIN (17 characters)");
+                    accepted(text) => { root.find-vin(text); }
+                }
+                Button {
+                    text: @tr("Find");
+                    enabled: !root.busy && vin-edit.text != "";
+                    clicked => { root.find-vin(vin-edit.text); }
+                }
             }
 
             Rectangle {
@@ -409,7 +447,14 @@ export component AppWindow inherits Window {
                         }
                     }
 
-                    ListView {
+                    model-list := ListView {
+                        property <int> scroll-request: root.scroll-serial;
+                        changed scroll-request => {
+                            self.viewport-y = min(0px, max(
+                                self.visible-height - self.viewport-height,
+                                self.visible-height / 2 - 16px - root.scroll-row * 32px));
+                        }
+
                         for row[i] in root.models: Rectangle {
                             height: 32px;
                             background: root.selected-index == i ? #4a90d922 : (touch.has-hover ? #8881 : transparent);
@@ -937,6 +982,67 @@ export component AppWindow inherits Window {
             font-size: 12px;
             color: root.status-is-error ? #d05050 : #808080;
             overflow: elide;
+        }
+    }
+
+    // ================= WYBÓR POJAZDU PO VIN =================
+    if root.vin-dialog: Rectangle {
+        background: #000000bb;
+
+        TouchArea {}
+
+        Rectangle {
+            width: 560px;
+            height: vin-layout.preferred-height;
+            background: #2b2b2b;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: #4a90d9;
+
+            vin-layout := VerticalLayout {
+                padding: 22px;
+                spacing: 10px;
+
+                Text {
+                    text: @tr("Which car is it?");
+                    font-size: 19px;
+                    font-weight: 700;
+                    color: #f0f0f0;
+                }
+
+                Text {
+                    text: @tr("The maker’s site gives more than one model for this VIN. Pick the one on the car’s screen — the platform is shown under Settings → System info.");
+                    font-size: 13px;
+                    color: #c8c8c8;
+                    wrap: word-wrap;
+                }
+
+                for choice[i] in root.vin-choices: Rectangle {
+                    height: 52px;
+                    border-radius: 4px;
+                    background: choice-touch.has-hover ? #4a90d933 : #ffffff0d;
+
+                    choice-touch := TouchArea {
+                        clicked => { root.choose-vin(i); }
+                    }
+
+                    VerticalLayout {
+                        padding-left: 12px;
+                        padding-right: 12px;
+                        alignment: center;
+                        Text { text: choice.title; font-size: 14px; font-weight: 700; color: #f0f0f0; }
+                        Text { text: choice.details; font-size: 12px; font-family: "monospace"; color: #c8c8c8; overflow: elide; }
+                    }
+                }
+
+                HorizontalLayout {
+                    alignment: end;
+                    Button {
+                        text: @tr("Cancel");
+                        clicked => { root.cancel-vin(); }
+                    }
+                }
+            }
         }
     }
 

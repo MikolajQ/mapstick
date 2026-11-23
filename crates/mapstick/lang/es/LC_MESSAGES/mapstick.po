@@ -727,3 +727,55 @@ msgstr "Descargado {} de {}{} · descomprimido {} de {}"
 #: rust
 msgid "Downloaded {} of {}{}"
 msgstr "Descargado {} de {}{}"
+
+#: rust
+msgid "A VIN has 17 characters: digits and letters other than I, O and Q."
+msgstr "Un VIN tiene 17 caracteres: dígitos y letras excepto I, O y Q."
+
+#: rust
+msgid "Could not look the VIN up: {}"
+msgstr "No se pudo buscar el VIN: {}"
+
+#: rust
+msgid "Looking the VIN up on the maker’s site…"
+msgstr "Buscando el VIN en el sitio del fabricante…"
+
+#: rust
+msgid "The maker does not know this VIN in the region {}. Check the number, or pick the model from the list."
+msgstr "El fabricante no conoce este VIN en la región {}. Revise el número o elija el modelo de la lista."
+
+#: rust
+msgid "The maker lists {} ({}), but its software is not in the download catalogue for this region."
+msgstr "El fabricante indica {} ({}), pero ese software no está en el catálogo de descargas de esta región."
+
+#: rust
+msgid "The maker’s VIN search answered with code {}"
+msgstr "La búsqueda de VIN del fabricante respondió con el código {}"
+
+#: rust
+msgid "This VIN fits more than one model — pick yours."
+msgstr "Este VIN corresponde a más de un modelo — elija el suyo."
+
+#: rust
+msgid "Unexpected response from the maker’s VIN search"
+msgstr "Respuesta inesperada de la búsqueda de VIN del fabricante"
+
+#: ui/app.slint
+msgid "VIN (17 characters)"
+msgstr "VIN (17 caracteres)"
+
+#: ui/app.slint
+msgid "Find"
+msgstr "Buscar"
+
+#: ui/app.slint
+msgid "Which car is it?"
+msgstr "¿Qué coche es?"
+
+#: ui/app.slint
+msgid "The maker’s site gives more than one model for this VIN. Pick the one on the car’s screen — the platform is shown under Settings → System info."
+msgstr "El sitio del fabricante indica más de un modelo para este VIN. Elija el que aparece en la pantalla del coche — la plataforma figura en Ajustes → Información del sistema."
+
+#: rust
+msgid "Found by VIN: {} ({})."
+msgstr "Encontrado por VIN: {} ({})."

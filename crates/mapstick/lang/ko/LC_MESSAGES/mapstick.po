@@ -727,3 +727,55 @@ msgstr "다운로드 {} / {}{} · 압축 해제 {} / {}"
 #: rust
 msgid "Downloaded {} of {}{}"
 msgstr "다운로드 {} / {}{}"
+
+#: rust
+msgid "A VIN has 17 characters: digits and letters other than I, O and Q."
+msgstr "VIN은 17자리입니다: 숫자와 I, O, Q를 제외한 영문자."
+
+#: rust
+msgid "Could not look the VIN up: {}"
+msgstr "VIN을 조회할 수 없습니다: {}"
+
+#: rust
+msgid "Looking the VIN up on the maker’s site…"
+msgstr "제조사 사이트에서 VIN을 조회하는 중…"
+
+#: rust
+msgid "The maker does not know this VIN in the region {}. Check the number, or pick the model from the list."
+msgstr "제조사가 {} 지역에서 이 VIN을 찾지 못했습니다. 번호를 확인하거나 목록에서 모델을 선택하세요."
+
+#: rust
+msgid "The maker lists {} ({}), but its software is not in the download catalogue for this region."
+msgstr "제조사 목록에는 {} ({})이(가) 있지만, 이 지역의 다운로드 카탈로그에는 해당 소프트웨어가 없습니다."
+
+#: rust
+msgid "The maker’s VIN search answered with code {}"
+msgstr "제조사 VIN 조회가 코드 {}(으)로 응답했습니다"
+
+#: rust
+msgid "This VIN fits more than one model — pick yours."
+msgstr "이 VIN에 해당하는 모델이 여러 개입니다 — 차량을 선택하세요."
+
+#: rust
+msgid "Unexpected response from the maker’s VIN search"
+msgstr "제조사 VIN 조회에서 예상치 못한 응답"
+
+#: ui/app.slint
+msgid "VIN (17 characters)"
+msgstr "VIN (17자리)"
+
+#: ui/app.slint
+msgid "Find"
+msgstr "찾기"
+
+#: ui/app.slint
+msgid "Which car is it?"
+msgstr "어떤 차량인가요?"
+
+#: ui/app.slint
+msgid "The maker’s site gives more than one model for this VIN. Pick the one on the car’s screen — the platform is shown under Settings → System info."
+msgstr "제조사 사이트에 이 VIN에 해당하는 모델이 여러 개 있습니다. 차량 화면에 표시된 것을 선택하세요 — 플랫폼은 설정 → 시스템 정보에서 확인할 수 있습니다."
+
+#: rust
+msgid "Found by VIN: {} ({})."
+msgstr "VIN으로 찾음: {} ({})."

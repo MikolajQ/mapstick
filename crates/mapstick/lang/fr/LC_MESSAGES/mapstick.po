@@ -727,3 +727,55 @@ msgstr "Téléchargé {} sur {}{} · décompressé {} sur {}"
 #: rust
 msgid "Downloaded {} of {}{}"
 msgstr "Téléchargé {} sur {}{}"
+
+#: rust
+msgid "A VIN has 17 characters: digits and letters other than I, O and Q."
+msgstr "Un VIN compte 17 caractères : des chiffres et des lettres sauf I, O et Q."
+
+#: rust
+msgid "Could not look the VIN up: {}"
+msgstr "Impossible de rechercher le VIN : {}"
+
+#: rust
+msgid "Looking the VIN up on the maker’s site…"
+msgstr "Recherche du VIN sur le site du constructeur…"
+
+#: rust
+msgid "The maker does not know this VIN in the region {}. Check the number, or pick the model from the list."
+msgstr "Le constructeur ne connaît pas ce VIN dans la région {}. Vérifiez le numéro ou choisissez le modèle dans la liste."
+
+#: rust
+msgid "The maker lists {} ({}), but its software is not in the download catalogue for this region."
+msgstr "Le constructeur indique {} ({}), mais ce logiciel n’est pas dans le catalogue de téléchargement de cette région."
+
+#: rust
+msgid "The maker’s VIN search answered with code {}"
+msgstr "La recherche VIN du constructeur a répondu avec le code {}"
+
+#: rust
+msgid "This VIN fits more than one model — pick yours."
+msgstr "Ce VIN correspond à plusieurs modèles — choisissez le vôtre."
+
+#: rust
+msgid "Unexpected response from the maker’s VIN search"
+msgstr "Réponse inattendue de la recherche VIN du constructeur"
+
+#: ui/app.slint
+msgid "VIN (17 characters)"
+msgstr "VIN (17 caractères)"
+
+#: ui/app.slint
+msgid "Find"
+msgstr "Rechercher"
+
+#: ui/app.slint
+msgid "Which car is it?"
+msgstr "De quelle voiture s’agit-il ?"
+
+#: ui/app.slint
+msgid "The maker’s site gives more than one model for this VIN. Pick the one on the car’s screen — the platform is shown under Settings → System info."
+msgstr "Le site du constructeur indique plusieurs modèles pour ce VIN. Choisissez celui affiché sur l’écran de la voiture — la plateforme figure dans Paramètres → Infos système."
+
+#: rust
+msgid "Found by VIN: {} ({})."
+msgstr "Trouvé par le VIN : {} ({})."
