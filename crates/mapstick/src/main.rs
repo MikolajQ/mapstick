@@ -2996,6 +2996,35 @@ impl Worker {
 }
 
 fn main() -> Result<()> {
+    // Bez tego `mapstick --version` otwierałby okno — a tej flagi używają
+    // menedżery pakietów i skrypty, często bez żadnego ekranu. Przed
+    // dziennikiem, bo ten pisze na to samo wyjście.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+
+    if args.iter().any(|a| a == "--version" || a == "-V") {
+        println!("mapstick {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        println!(
+            "MapStick {} — navigation map updates for Hyundai, Kia and Genesis on a USB drive\n\
+             \n\
+             Usage:\n  \
+               mapstick                 open the window\n  \
+               mapstick <link>          open the car behind a \"Download\" link from the maker's site\n  \
+               mapstick --check         check watched cars for new releases (run by the schedule)\n  \
+               mapstick --check --now   the same, ignoring the check interval\n  \
+               mapstick --version       print the version\n\
+             \n\
+             Environment:\n  \
+               MAPSTICK_LANG=<code>     interface language (en, pl, de, fr, es, pt_BR, ko)\n  \
+               RUST_LOG=debug           more detail in the log",
+            env!("CARGO_PKG_VERSION")
+        );
+        return Ok(());
+    }
+
     // Domyślnie INFO, ale RUST_LOG bierze górę — bez tego jedyną drogą do
     // szczegółów (choćby postępu odmalowywanego dziesięć razy na sekundę)
     // byłaby przebudowa aplikacji.
@@ -3018,8 +3047,6 @@ fn main() -> Result<()> {
     rustls::crypto::ring::default_provider()
         .install_default()
         .map_err(|_| anyhow!(tr!("Could not set up the rustls crypto provider.")))?;
-
-    let args: Vec<String> = std::env::args().skip(1).collect();
 
     // Sprawdzenie z harmonogramu: bez okna, bez pętli zdarzeń, bez ekranu.
     // Kończy się samo, więc między sprawdzeniami nie zostaje ani jeden proces.
