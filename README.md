@@ -111,6 +111,8 @@ server reports is often zero or wrong.
   complete, so a failed download never leaves the drive without a working
   version.
 
+![The drive view: MapStick recognises the maps already on the drive](docs/screenshots/medium-en.png)
+
 ### Download
 
 - **Half the writes to the drive.** The update comes as split zip archives.

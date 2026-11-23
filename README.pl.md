@@ -114,6 +114,8 @@ przez serwer bywa zerowa albo błędna.
   kompletne — nieudane pobranie nigdy nie zostawi pendrive'a bez działającej
   wersji.
 
+![Widok pendrive'a: MapStick rozpoznaje mapy, które już na nim są](docs/screenshots/medium-pl.png)
+
 ### Pobieranie
 
 - **Połowa zapisów na pendrive.** Aktualizacja przychodzi jako dzielone
