@@ -36,6 +36,16 @@ pub fn available() -> impl Iterator<Item = &'static str> {
 /// `preferred` to wybór użytkownika z ustawień, jeśli go zrobił; bez niego
 /// pytamy system. Wywołane po raz drugi nic nie zmienia — Slint też wybiera
 /// raz i oba wybory mają się zgadzać.
+/// Czy wybrany język pisze ułamki z przecinkiem („25,5 GiB”). Tak piszą
+/// wszystkie nasze tłumaczenia poza koreańskim; angielski — z kropką.
+pub fn decimal_comma() -> bool {
+    let Some(Some(index)) = CHOSEN.get() else {
+        return false;
+    };
+
+    matches!(TRANSLATIONS[*index].0, "pl" | "de" | "fr" | "es" | "pt_BR")
+}
+
 pub fn choose(preferred: Option<&str>) -> Option<&'static str> {
     let locale = preferred
         .map(str::to_owned)

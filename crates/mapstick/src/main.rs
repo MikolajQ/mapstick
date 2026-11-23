@@ -332,6 +332,8 @@ fn format_size(bytes: u64) -> String {
 
     if unit == 0 {
         format!("{bytes} {}", UNITS[0])
+    } else if i18n::decimal_comma() {
+        format!("{value:.1} {}", UNITS[unit]).replacen('.', ",", 1)
     } else {
         format!("{value:.1} {}", UNITS[unit])
     }
