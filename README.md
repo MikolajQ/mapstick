@@ -273,7 +273,7 @@ directly.
 
 ## Building from source
 
-You need Rust 1.88 or newer. On Linux also the development headers of
+You need Rust 1.92 or newer. On Linux also the development headers of
 fontconfig, xkbcommon, Wayland and libudev (Debian/Ubuntu:
 `libfontconfig1-dev libxkbcommon-dev libwayland-dev libudev-dev`).
 

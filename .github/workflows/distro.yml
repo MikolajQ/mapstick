@@ -38,7 +38,9 @@ permissions:
   contents: write
 
 env:
-  MIN_UBUNTU: "22.04"
+  # 22.04 odpada: najnowszy Rust w jammy-updates to 1.91, a Slint 1.17
+  # wymaga 1.92. Ubuntu 22.04 i Mint 21 dostają archiwum z wydania.
+  MIN_UBUNTU: "24.04"
 
 jobs:
   source:
