@@ -19,6 +19,8 @@ name: Distribution packages
 #   sekret  COPR_WEBHOOK_URL adres webhooka „custom” pakietu mapstick w Copr
 
 on:
+  push:
+    branches: [distro-packages]  # TYMCZASOWE — próbny przebieg, usunąć przed scaleniem
   release:
     types: [published]
   workflow_dispatch:
