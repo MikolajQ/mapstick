@@ -54,8 +54,7 @@ pub fn stage_and_place(
                 .with_context(|| tr!("Could not remove {}", leftover.display()))?;
         }
     }
-    fs::create_dir_all(&staging)
-        .with_context(|| tr!("Could not create {}", staging.display()))?;
+    fs::create_dir_all(&staging).with_context(|| tr!("Could not create {}", staging.display()))?;
 
     if copy_dir(source, &staging, cancel, on_bytes)? == Outcome::Cancelled {
         return Ok(Outcome::Cancelled);
@@ -63,8 +62,7 @@ pub fn stage_and_place(
 
     place(&staging, target)?;
 
-    fs::remove_dir_all(&staging)
-        .with_context(|| tr!("Could not remove {}", staging.display()))?;
+    fs::remove_dir_all(&staging).with_context(|| tr!("Could not remove {}", staging.display()))?;
 
     Ok(Outcome::Done)
 }
@@ -75,8 +73,7 @@ fn copy_dir(
     cancel: &AtomicBool,
     on_bytes: &mut dyn FnMut(u64),
 ) -> Result<Outcome> {
-    let entries =
-        fs::read_dir(from).with_context(|| tr!("Could not read {}", from.display()))?;
+    let entries = fs::read_dir(from).with_context(|| tr!("Could not read {}", from.display()))?;
 
     for entry in entries {
         if cancel.load(Ordering::Relaxed) {
@@ -113,10 +110,10 @@ fn copy_file(
     cancel: &AtomicBool,
     on_bytes: &mut dyn FnMut(u64),
 ) -> Result<Outcome> {
-    let mut input = fs::File::open(source)
-        .with_context(|| tr!("Could not open {}", source.display()))?;
-    let mut output = fs::File::create(target)
-        .with_context(|| tr!("Could not create {}", target.display()))?;
+    let mut input =
+        fs::File::open(source).with_context(|| tr!("Could not open {}", source.display()))?;
+    let mut output =
+        fs::File::create(target).with_context(|| tr!("Could not create {}", target.display()))?;
 
     let mut buffer = vec![0u8; CHUNK];
 
@@ -154,13 +151,12 @@ fn copy_file(
 /// Wszystko leży już na tym samym systemie plików, więc to zmiana nazwy —
 /// natychmiastowa, bez drugiego przepisywania danych.
 fn place(staging: &Path, target: &Path) -> Result<()> {
-    let entries = fs::read_dir(staging)
-        .with_context(|| tr!("Could not read {}", staging.display()))?;
+    let entries =
+        fs::read_dir(staging).with_context(|| tr!("Could not read {}", staging.display()))?;
 
     let mut paths: Vec<PathBuf> = Vec::new();
     for entry in entries {
-        let entry =
-            entry.with_context(|| tr!("Could not read {}", staging.display()))?;
+        let entry = entry.with_context(|| tr!("Could not read {}", staging.display()))?;
         paths.push(entry.path());
     }
 
@@ -177,9 +173,8 @@ fn place(staging: &Path, target: &Path) -> Result<()> {
         // tylko czasem — usuwamy jawnie, żeby zachowanie nie zależało od
         // systemu.
         if destination.exists() {
-            let previous = fs::symlink_metadata(&destination).with_context(|| {
-                tr!("Could not check {}", destination.display())
-            })?;
+            let previous = fs::symlink_metadata(&destination)
+                .with_context(|| tr!("Could not check {}", destination.display()))?;
 
             if previous.is_dir() {
                 fs::remove_dir_all(&destination)
@@ -226,12 +221,9 @@ mod tests {
         fs::create_dir_all(&target).unwrap();
 
         let mut copied = 0u64;
-        let outcome = stage_and_place(
-            &source,
-            &target,
-            &AtomicBool::new(false),
-            &mut |n| copied += n,
-        )
+        let outcome = stage_and_place(&source, &target, &AtomicBool::new(false), &mut |n| {
+            copied += n
+        })
         .unwrap();
 
         assert_eq!(outcome, Outcome::Done);

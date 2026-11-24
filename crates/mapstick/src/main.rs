@@ -77,14 +77,19 @@ const UI_REFRESH: Duration = Duration::from_millis(100);
 enum Cmd {
     /// `restore` fałszywe, gdy zaraz przyjdzie odnośnik — odtwarzanie
     /// ostatniego modelu byłoby wtedy pobraniem katalogu na darmo.
-    Startup { restore: bool },
+    Startup {
+        restore: bool,
+    },
     ToggleFavourite,
     SetWatch(bool),
     SetInterval(usize),
     SetReport(usize),
     SetInstalled(usize),
     OpenFavourite(String),
-    LoadModels { brand: usize, region: usize },
+    LoadModels {
+        brand: usize,
+        region: usize,
+    },
     Filter(String),
     Select(usize),
     StartDownload,
@@ -124,7 +129,9 @@ enum Cmd {
     },
     /// Kopiowanie dobiegło końca — także przerwane albo nieudane.
     /// `forget` niesie model, którego dane zniknęły z dysku.
-    CopyEnded { forget: Option<String> },
+    CopyEnded {
+        forget: Option<String>,
+    },
 }
 
 /// Ślad trwającego pobrania: co po nim usunąć, jeśli zostanie anulowane.
@@ -274,13 +281,20 @@ fn describe(error: &(dyn std::error::Error + 'static)) -> String {
             M::ReadDir(path, _) => tr!("Could not read the folder {}", path.display()),
             M::ReadFile(path, _) => tr!("Could not read the file {}", path.display()),
             M::VerFileCount(path, count) => {
-                tr!("The folder {} holds {} .ver files instead of one", path.display(), count)
+                tr!(
+                    "The folder {} holds {} .ver files instead of one",
+                    path.display(),
+                    count
+                )
             }
             M::InvalidVerFile(path, _) => tr!("Invalid .ver file: {}", path.display()),
             M::Space(path, _) => tr!("Could not check the free space in {}", path.display()),
             M::NotMounted(medium) => tr!("The medium {} is not mounted", medium),
             M::SystemDisk(medium) => {
-                tr!("Refused: {} holds system data and cannot be a target", medium)
+                tr!(
+                    "Refused: {} holds system data and cannot be a target",
+                    medium
+                )
             }
             M::Backend(source) => tr!("Could not talk to the disk service: {}", source),
             M::Service(reason) => tr!("The disk service refused: {}", reason),
@@ -677,7 +691,11 @@ impl Worker {
         });
 
         let chosen = wanted
-            .and_then(|v| choices.iter().position(|c| c.as_deref() == Some(v.as_str())))
+            .and_then(|v| {
+                choices
+                    .iter()
+                    .position(|c| c.as_deref() == Some(v.as_str()))
+            })
             .unwrap_or(0);
 
         (labels, choices, chosen)
@@ -777,7 +795,10 @@ impl Worker {
         self.save_store();
 
         self.sync_schedule(if on {
-            tr!("Watching {} — I will let you know when a new release appears.", label)
+            tr!(
+                "Watching {} — I will let you know when a new release appears.",
+                label
+            )
         } else {
             tr!("No longer watching {}.", label)
         });
@@ -789,7 +810,10 @@ impl Worker {
         self.save_store();
 
         let message = match report {
-            Some(i) => tr!("The background check will report {} that it works.", i18n::tr(i.label())),
+            Some(i) => tr!(
+                "The background check will report {} that it works.",
+                i18n::tr(i.label())
+            ),
             None => tr!("No status reports — only an alarm when the check stops working."),
         };
         self.set_status(message, false);
@@ -817,10 +841,17 @@ impl Worker {
         };
 
         match outcome {
-            Ok(Some(kind)) => self.set_status(tr!("{} Woken by {}.", message, i18n::tr(kind.label())), false),
+            Ok(Some(kind)) => self.set_status(
+                tr!("{} Woken by {}.", message, i18n::tr(kind.label())),
+                false,
+            ),
             Ok(None) => self.set_status(message, false),
             Err(e) => self.set_status(
-                tr!("{} The schedule could not be set up, though: {}", message, format!("{e:#}")),
+                tr!(
+                    "{} The schedule could not be set up, though: {}",
+                    message,
+                    format!("{e:#}")
+                ),
                 true,
             ),
         }
@@ -1343,7 +1374,9 @@ impl Worker {
             return None;
         }
 
-        let installed = mapstick_media::read_installed(&record.path).ok().flatten()?;
+        let installed = mapstick_media::read_installed(&record.path)
+            .ok()
+            .flatten()?;
 
         // Przerwane pobranie ma manifest, ale nie ma plików — nie ma czego
         // z niego kopiować.
@@ -1369,7 +1402,11 @@ impl Worker {
         tracing::info!(
             "gotowe dane na dysku twardym: {} → {}",
             if shown.is_empty() { "brak" } else { &shown },
-            if onto.is_empty() { "nie ma dokąd" } else { &onto }
+            if onto.is_empty() {
+                "nie ma dokąd"
+            } else {
+                &onto
+            }
         );
 
         self.with_ui(move |ui| {
@@ -1432,7 +1469,10 @@ impl Worker {
         let stale = self.stale_on_target(&mount);
 
         if stale.is_empty() {
-            self.set_status(tr!("There are no files of a previous release there."), false);
+            self.set_status(
+                tr!("There are no files of a previous release there."),
+                false,
+            );
             return;
         }
 
@@ -1612,20 +1652,20 @@ impl Worker {
 
             (
                 (if self.target_is_medium() {
-                        tr!(
-                            "The downloaded archives ({}) go to the hard disk for the time \
+                    tr!(
+                        "The downloaded archives ({}) go to the hard disk for the time \
                              being; only the unpacked result ({}) lands on the removable medium.",
-                            format_size(download),
-                            format_size(extracted)
-                        )
-                    } else {
-                        tr!(
-                            "The downloaded archives will be unpacked into the chosen folder \
+                        format_size(download),
+                        format_size(extracted)
+                    )
+                } else {
+                    tr!(
+                        "The downloaded archives will be unpacked into the chosen folder \
                              ({} needed). Once the download finishes, plug in the removable \
                              device and click “Refresh” to copy or move the data onto it.",
-                            format_size(extracted)
-                        )
-                    }),
+                        format_size(extracted)
+                    )
+                }),
                 !enough,
             )
         };
@@ -1680,7 +1720,9 @@ impl Worker {
                     _ if !m.is_exfat() => (tr!("needs exFAT"), false),
                     // Ta sama wersja: nudl pominie wszystkie pliki, więc
                     // pobieranie skończy się natychmiast i niczego nie zmieni.
-                    _ if same_version => (tr!("the medium already holds the current version"), true),
+                    _ if same_version => {
+                        (tr!("the medium already holds the current version"), true)
+                    }
                     _ if needed > 0 && !m.fits(needed) => (tr!("not enough space"), false),
                     // Prawie wszystkie pliki mają stałe ścieżki, więc nowe
                     // wydanie nadpisze je w miejscu; osierocone zostaje głównie
@@ -1688,10 +1730,8 @@ impl Worker {
                     // zainstaluje — czyta manifest — więc to kwestia miejsca,
                     // nie poprawności.
                     _ if other_version => (
-                        tr!(
-                            "another version is on the medium; it will be removed once \
-                             the current one is downloaded"
-                        ),
+                        tr!("another version is on the medium; it will be removed once \
+                             the current one is downloaded"),
                         true,
                     ),
                     _ => (tr!("ready"), true),
@@ -1709,7 +1749,10 @@ impl Worker {
                     .map(|s| format_size(s.bytes))
                     .unwrap_or_default();
 
-                let filesystem = m.filesystem.as_deref().unwrap_or(i18n::tr("no file system"));
+                let filesystem = m
+                    .filesystem
+                    .as_deref()
+                    .unwrap_or(i18n::tr("no file system"));
                 let connection = m
                     .connection
                     .as_deref()
@@ -1727,7 +1770,12 @@ impl Worker {
                         connection,
                     )
                 } else {
-                    tr!("{} · {}{}", filesystem, format_size(m.total_bytes), connection)
+                    tr!(
+                        "{} · {}{}",
+                        filesystem,
+                        format_size(m.total_bytes),
+                        connection
+                    )
                 };
 
                 tracing::info!("{}: {status}", m.id);
@@ -1778,7 +1826,9 @@ impl Worker {
                 if count == 0 {
                     if announce {
                         self.set_status(
-                            tr!("No removable medium found. Internal and system disks are skipped."),
+                            tr!(
+                                "No removable medium found. Internal and system disks are skipped."
+                            ),
                             false,
                         );
                     }
@@ -1861,7 +1911,11 @@ impl Worker {
                 // Po montowaniu lista jest odczytana na nowo — numer wiersza
                 // bierzemy z niej, a nie sprzed montowania.
                 Some(mount) => {
-                    let index = self.media.iter().position(|m| m.id == medium.id).unwrap_or(index);
+                    let index = self
+                        .media
+                        .iter()
+                        .position(|m| m.id == medium.id)
+                        .unwrap_or(index);
                     (mount, index)
                 }
                 None => return,
@@ -1907,7 +1961,9 @@ impl Worker {
                 let hint = if reason.contains("not configured in kernel") {
                     format!(
                         " {}",
-                        tr!("If the system was updated recently, restart the computer — the running kernel can no longer load its file system drivers.")
+                        tr!(
+                            "If the system was updated recently, restart the computer — the running kernel can no longer load its file system drivers."
+                        )
                     )
                 } else {
                     String::new()
@@ -2294,7 +2350,9 @@ impl Worker {
     /// całość leci na wątku blokującym, a nie w pętli asynchronicznej.
     fn start_copy(&mut self) -> Result<()> {
         let source = self.ready_copy().ok_or_else(|| {
-            anyhow!(tr!("There is no ready firmware for this model on the disk."))
+            anyhow!(tr!(
+                "There is no ready firmware for this model on the disk."
+            ))
         })?;
         let target = self
             .copy_destination()
@@ -2401,10 +2459,7 @@ impl Worker {
                     None
                 };
 
-                Ok(CopyEnd::Done {
-                    model_id,
-                    removed,
-                })
+                Ok(CopyEnd::Done { model_id, removed })
             })
             .await;
 
@@ -2421,11 +2476,9 @@ impl Worker {
                             false,
                         ),
                         Some(false) => (
-                            tr!(
-                                "Copied to the medium, but the copy on the disk was not \
+                            tr!("Copied to the medium, but the copy on the disk was not \
                                  removed — I could not confirm they match. Check the medium \
-                                 and remove it by hand."
-                            ),
+                                 and remove it by hand."),
                             true,
                         ),
                     }
@@ -2470,9 +2523,7 @@ impl Worker {
         self.with_ui(|ui| {
             ui.set_downloading(false);
             ui.set_paused(true);
-            ui.set_status(
-                tr!("Download paused. Click “Resume” to carry on from here.").into(),
-            );
+            ui.set_status(tr!("Download paused. Click “Resume” to carry on from here.").into());
             ui.set_status_is_error(false);
         });
     }
@@ -2483,7 +2534,6 @@ impl Worker {
     /// chodzi: „anuluj” ma nie zostawiać na dysku dziesiątek gigabajtów,
     /// o których za pół roku nikt nie będzie pamiętał, skąd się wzięły.
     async fn abandon(&mut self) {
-
         // Najpierw niech zadanie naprawdę stanie. Kasowanie plików spod ręki
         // piszącego wątku zostawiłoby połowę z nich odtworzonych.
         if let Some(handle) = self.download.take() {
@@ -2523,9 +2573,7 @@ impl Worker {
         freed += doomed.bytes;
         stale::remove(&footprint.output, &doomed);
 
-        let manifest = footprint
-            .output
-            .join(format!("{}.ver", footprint.model_id));
+        let manifest = footprint.output.join(format!("{}.ver", footprint.model_id));
         if let Err(e) = std::fs::remove_file(&manifest)
             && e.kind() != std::io::ErrorKind::NotFound
         {
@@ -2547,7 +2595,10 @@ impl Worker {
         self.push_target_state();
         self.push_leftovers();
         self.set_status(
-            tr!("Download cancelled — leftovers removed: {}.", format_size(freed)),
+            tr!(
+                "Download cancelled — leftovers removed: {}.",
+                format_size(freed)
+            ),
             false,
         );
     }
@@ -2877,7 +2928,10 @@ impl Worker {
             .collect();
         self.vin_choices = found;
 
-        self.set_status(tr!("This VIN fits more than one model — pick yours."), false);
+        self.set_status(
+            tr!("This VIN fits more than one model — pick yours."),
+            false,
+        );
         self.with_ui(move |ui| {
             ui.set_vin_choices(ModelRc::new(VecModel::from(rows)));
             ui.set_vin_dialog(true);
@@ -2896,7 +2950,11 @@ impl Worker {
     async fn open_vin_candidate(&mut self, candidate: vin::Candidate) {
         if self.open_target(candidate.target).await {
             self.set_status(
-                tr!("Found by VIN: {} ({}).", candidate.model, candidate.platform),
+                tr!(
+                    "Found by VIN: {} ({}).",
+                    candidate.model,
+                    candidate.platform
+                ),
                 false,
             );
         }
@@ -3091,10 +3149,7 @@ fn main() -> Result<()> {
     // kto po prostu woli inny język niż ten, który ma ustawiony pulpit.
     let preferred = std::env::var("MAPSTICK_LANG").ok();
     let language = i18n::choose(preferred.as_deref());
-    tracing::info!(
-        "Język interfejsu: {}",
-        language.unwrap_or("en (domyślny)")
-    );
+    tracing::info!("Język interfejsu: {}", language.unwrap_or("en (domyślny)"));
 
     instance::announce_running();
 

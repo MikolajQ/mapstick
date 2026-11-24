@@ -210,7 +210,9 @@ mod tests {
             }
             // rustc czyta CRLF (checkout na Windows) jak LF, więc parser też —
             // inaczej kontynuacja wiersza zostawia w napisie `\r`.
-            let text = std::fs::read_to_string(&path).unwrap().replace("\r\n", "\n");
+            let text = std::fs::read_to_string(&path)
+                .unwrap()
+                .replace("\r\n", "\n");
 
             for call in ["tr!(", "i18n::tr("] {
                 for (start, _) in text.match_indices(call) {
@@ -275,10 +277,18 @@ mod tests {
         messages.extend(Interval::ALL.iter().map(|i| i.label().to_owned()));
         messages.extend(crate::REGIONS.iter().map(|(_, label)| (*label).to_owned()));
 
-        assert!(messages.len() > 50, "parser znalazł podejrzanie mało: {}", messages.len());
+        assert!(
+            messages.len() > 50,
+            "parser znalazł podejrzanie mało: {}",
+            messages.len()
+        );
         // Pusta tablica przepuściłaby wszystko — tak ten test raz przeszedł
         // z dziewięcioma nieprzetłumaczonymi napisami.
-        assert!(TRANSLATIONS.len() >= 6, "wbudowanych języków: {}", TRANSLATIONS.len());
+        assert!(
+            TRANSLATIONS.len() >= 6,
+            "wbudowanych języków: {}",
+            TRANSLATIONS.len()
+        );
 
         let mut missing = Vec::new();
         for (language, table) in TRANSLATIONS {
@@ -291,6 +301,10 @@ mod tests {
         missing.sort();
         missing.dedup();
 
-        assert!(missing.is_empty(), "brak tłumaczeń:\n{}", missing.join("\n"));
+        assert!(
+            missing.is_empty(),
+            "brak tłumaczeń:\n{}",
+            missing.join("\n")
+        );
     }
 }

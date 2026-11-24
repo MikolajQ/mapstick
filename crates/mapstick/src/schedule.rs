@@ -106,7 +106,9 @@ mod linux {
     }
 
     fn autostart_named(name: &str) -> PathBuf {
-        config_home().join("autostart").join(format!("{name}.desktop"))
+        config_home()
+            .join("autostart")
+            .join(format!("{name}.desktop"))
     }
 
     /// Czy w tej sesji w ogóle jest do kogo mówić.
@@ -280,7 +282,10 @@ mod linux {
     fn cron_line(_interval: Interval) -> Result<String> {
         // Cron oddaje wiersz powłoce, a `%` zamienia na nową linię — stąd
         // apostrofy i `\%`.
-        let exe = binary()?.to_string_lossy().replace('\'', "'\\''").replace('%', "\\%");
+        let exe = binary()?
+            .to_string_lossy()
+            .replace('\'', "'\\''")
+            .replace('%', "\\%");
 
         Ok(format!("@daily '{exe}' --check # {NAME}"))
     }
@@ -552,8 +557,7 @@ mod windows {
             .into_iter()
             .chain(xml.encode_utf16().flat_map(u16::to_le_bytes))
             .collect();
-        std::fs::write(&path, bytes)
-            .with_context(|| tr!("Could not write {}", path.display()))?;
+        std::fs::write(&path, bytes).with_context(|| tr!("Could not write {}", path.display()))?;
 
         let output = schtasks(&[
             "/Create",
@@ -703,8 +707,7 @@ mod macos {
         );
 
         let path = plist_path();
-        std::fs::write(&path, plist)
-            .with_context(|| tr!("Could not write {}", path.display()))?;
+        std::fs::write(&path, plist).with_context(|| tr!("Could not write {}", path.display()))?;
 
         let output = launchctl(&["load", "-w", &path.to_string_lossy()])?;
         if !output.status.success() {
@@ -746,7 +749,9 @@ mod other {
     use super::*;
 
     pub fn install(_interval: Interval) -> Result<Kind> {
-        Err(anyhow!("Automatic checking is not available on this platform"))
+        Err(anyhow!(
+            "Automatic checking is not available on this platform"
+        ))
     }
 
     pub fn remove() -> Result<()> {

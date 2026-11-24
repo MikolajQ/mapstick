@@ -127,7 +127,12 @@ fn powershell(script: &str) -> Command {
     let script = format!("[Console]::OutputEncoding = [Text.Encoding]::UTF8\n{script}");
     let mut command = Command::new("powershell.exe");
     command
-        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass"])
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+        ])
         .args(["-EncodedCommand", &encode(&script)])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -183,7 +188,11 @@ fn usable(disks: Vec<Disk>) -> Vec<Medium> {
         let drive_id = format!("disk{}", disk.number);
 
         if let Err(reason) = check_drive(&facts(&disk)) {
-            tracing::debug!("Pomijam {drive_id} ({}): {}", disk.friendly_name, reason.reason());
+            tracing::debug!(
+                "Pomijam {drive_id} ({}): {}",
+                disk.friendly_name,
+                reason.reason()
+            );
             continue;
         }
 
@@ -227,11 +236,19 @@ pub fn space_for(path: &Path) -> Result<Space> {
     // SAFETY: `wide` jest zakończone zerem i żyje przez całe wywołanie;
     // wskaźniki wyjściowe prowadzą do zmiennych na stosie.
     let ok = unsafe {
-        GetDiskFreeSpaceExW(wide.as_ptr(), &mut available, &mut total, std::ptr::null_mut())
+        GetDiskFreeSpaceExW(
+            wide.as_ptr(),
+            &mut available,
+            &mut total,
+            std::ptr::null_mut(),
+        )
     };
 
     if ok == 0 {
-        return Err(Error::Space(path.to_owned(), std::io::Error::last_os_error()));
+        return Err(Error::Space(
+            path.to_owned(),
+            std::io::Error::last_os_error(),
+        ));
     }
 
     Ok(Space {

@@ -25,9 +25,9 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use jiff::{Timestamp, ToSpan};
-use mapstick_store::{Favourite, Interval, Store};
 #[cfg(target_os = "linux")]
 use mapstick_store::InstalledSource;
+use mapstick_store::{Favourite, Interval, Store};
 
 use crate::{BRANDS, brand_index, fetch_entries, tr};
 
@@ -181,7 +181,8 @@ async fn gather(force: bool) -> Result<(Option<Report>, Vec<News>)> {
 
     // Blokada obejmuje cały cykl odczyt-zmiana-zapis: w tym czasie otwarte
     // okno nie podmieni pliku pod nami.
-    let _lock = mapstick_store::lock(&path).with_context(|| tr!("Could not lock the favourites file"))?;
+    let _lock =
+        mapstick_store::lock(&path).with_context(|| tr!("Could not lock the favourites file"))?;
     let mut store = Store::load(&path)?;
 
     if store.watched().next().is_none() {
@@ -632,7 +633,10 @@ mod tests {
         let news = worth_saying(&favourite(), false, now()).unwrap();
 
         assert_eq!(news.known, None);
-        assert!(news.body().contains("I don’t know what version is in the car"));
+        assert!(
+            news.body()
+                .contains("I don’t know what version is in the car")
+        );
         assert!(news.body().contains("2026.07"));
     }
 
@@ -660,10 +664,17 @@ mod tests {
         f.notified_version = Some("NE1.002".to_owned());
 
         f.notified_at = Some((now() - 2.hours()).to_string());
-        assert_eq!(worth_saying(&f, false, now()), None, "dwie godziny to za wcześnie");
+        assert_eq!(
+            worth_saying(&f, false, now()),
+            None,
+            "dwie godziny to za wcześnie"
+        );
 
         f.notified_at = Some((now() - 25.hours()).to_string());
-        assert!(worth_saying(&f, false, now()).is_some(), "po dobie należy się");
+        assert!(
+            worth_saying(&f, false, now()).is_some(),
+            "po dobie należy się"
+        );
     }
 
     /// Nowszy numer nie czeka na dobę — to inna wiadomość.
@@ -817,7 +828,10 @@ mod tests {
         store.background.error = Some("offline".to_owned());
 
         let report = report(&mut store, false, now(), false).unwrap();
-        assert_eq!(report.trouble, None, "tydzień plus dzień mieści się w zapasie");
+        assert_eq!(
+            report.trouble, None,
+            "tydzień plus dzień mieści się w zapasie"
+        );
     }
 
     /// Okno aplikacji pyta producenta przy każdym uruchomieniu — jego

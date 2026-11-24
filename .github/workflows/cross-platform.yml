@@ -28,6 +28,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Formatowanie jest takie samo na każdym systemie — wystarczy raz.
+      - name: Formatting
+        if: runner.os == 'Linux'
+        run: cargo fmt --all --check
+
       # Nagłówki, których Slint (winit + femtovg) potrzebuje do zbudowania
       # się na Linuksie. Windows i macOS mają to wbudowane w system.
       - name: Install Linux build dependencies

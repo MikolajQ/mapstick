@@ -194,7 +194,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("cudzy-plik.txt"), b"moje").unwrap();
 
-        assert_eq!(find(dir.path(), "Bayon_EU", &HashSet::new()), Stale::default());
+        assert_eq!(
+            find(dir.path(), "Bayon_EU", &HashSet::new()),
+            Stale::default()
+        );
     }
 
     /// Uszkodzony manifest też nie jest podstawą do kasowania.

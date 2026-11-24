@@ -60,9 +60,9 @@ pub fn normalize(input: &str) -> Option<String> {
         .collect();
 
     let valid = vin.len() == 17
-        && vin
-            .chars()
-            .all(|c| c.is_ascii_digit() || (c.is_ascii_uppercase() && !matches!(c, 'I' | 'O' | 'Q')));
+        && vin.chars().all(|c| {
+            c.is_ascii_digit() || (c.is_ascii_uppercase() && !matches!(c, 'I' | 'O' | 'Q'))
+        });
 
     valid.then_some(vin)
 }
@@ -101,7 +101,11 @@ fn guessed_brand(vin: &str) -> Option<&'static str> {
 pub fn brand_order(vin: &str, selected: &'static str, all: &[&'static str]) -> Vec<&'static str> {
     let mut order: Vec<&'static str> = Vec::with_capacity(all.len());
 
-    for brand in guessed_brand(vin).into_iter().chain([selected]).chain(all.iter().copied()) {
+    for brand in guessed_brand(vin)
+        .into_iter()
+        .chain([selected])
+        .chain(all.iter().copied())
+    {
         if !order.contains(&brand) {
             order.push(brand);
         }
@@ -212,7 +216,10 @@ fn parse(brand: &str, region: &str, text: &str) -> Result<Option<Vec<Candidate>>
         // zapytania — pokazujemy kod, a treść zostaje w dzienniku.
         status => {
             tracing::warn!("Wyszukiwanie VIN: {status} {:?}", response.message);
-            return Err(anyhow!(tr!("The maker’s VIN search answered with code {}", status)));
+            return Err(anyhow!(tr!(
+                "The maker’s VIN search answered with code {}",
+                status
+            )));
         }
     }
 
@@ -247,7 +254,10 @@ fn parse(brand: &str, region: &str, text: &str) -> Result<Option<Vec<Candidate>>
             };
 
             // Ten sam kod pod dwiema rodzinami modelu to wciąż ten sam wybór.
-            if !candidates.iter().any(|c| c.target.mcode == candidate.target.mcode) {
+            if !candidates
+                .iter()
+                .any(|c| c.target.mcode == candidate.target.mcode)
+            {
                 candidates.push(candidate);
             }
         }
@@ -310,7 +320,11 @@ mod tests {
             Some("TMAH0000000000001")
         );
         assert_eq!(normalize("TMAH000000000000"), None, "16 znaków");
-        assert_eq!(normalize("TMAH000000000000O"), None, "O nie występuje w VIN");
+        assert_eq!(
+            normalize("TMAH000000000000O"),
+            None,
+            "O nie występuje w VIN"
+        );
     }
 
     #[test]

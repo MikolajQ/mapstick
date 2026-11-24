@@ -67,7 +67,10 @@ fn service<E: Into<zbus::Error>>(e: E) -> Error {
 fn block_path(id: &str) -> Result<OwnedObjectPath> {
     OwnedObjectPath::try_from(format!(
         "/org/freedesktop/UDisks2/block_devices/{}",
-        id.rsplit('/').next().unwrap_or_default().replace('-', "_2d")
+        id.rsplit('/')
+            .next()
+            .unwrap_or_default()
+            .replace('-', "_2d")
     ))
     .map_err(backend)
 }

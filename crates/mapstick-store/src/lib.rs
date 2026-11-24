@@ -434,7 +434,11 @@ pub fn adopt_legacy(old: &Path, new: &Path) {
 
     if let Err(e) = std::fs::rename(old, new) {
         // Pierwszeństwo ma działający program: najwyżej zacznie od zera.
-        eprintln!("MapStick: nie przeniosę {} do {}: {e}", old.display(), new.display());
+        eprintln!(
+            "MapStick: nie przeniosę {} do {}: {e}",
+            old.display(),
+            new.display()
+        );
     }
 }
 
@@ -625,7 +629,10 @@ mod tests {
         let mut f = sample();
         f.installed_version = Some("XX.YY.ZZ.001".to_owned());
 
-        assert_eq!(f.matching(&versions).unwrap(), "NE1.EUR.ccNC.001.002.260312");
+        assert_eq!(
+            f.matching(&versions).unwrap(),
+            "NE1.EUR.ccNC.001.002.260312"
+        );
     }
 
     /// Gdy nie wiemy, co w aucie, ale wiemy, co sami pobraliśmy — to lepsze
@@ -643,7 +650,10 @@ mod tests {
     #[test]
     fn a_legacy_file_is_adopted_once() {
         let dir = tempfile::tempdir().unwrap();
-        let (old, new) = (dir.path().join("ulubione.json"), dir.path().join("favourites.json"));
+        let (old, new) = (
+            dir.path().join("ulubione.json"),
+            dir.path().join("favourites.json"),
+        );
 
         std::fs::write(&old, "stary").unwrap();
         adopt_legacy(&old, &new);
