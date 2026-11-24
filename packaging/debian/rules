@@ -43,6 +43,12 @@ override_dh_auto_install:
 override_dh_auto_clean:
 	rm -rf target debian/cargo-home
 
+# dh_clean deletes every *.orig file, but vendor/ holds hundreds of them
+# (Cargo.toml.orig and more), each listed in its crate's .cargo-checksum.json:
+# without them cargo refuses to build.
+override_dh_clean:
+	dh_clean -X.orig
+
 # The release profile already strips the binary (Cargo.toml); there is no
 # debug information for dwz to compress.
 override_dh_dwz:
