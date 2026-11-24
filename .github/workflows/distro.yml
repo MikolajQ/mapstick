@@ -1,0 +1,280 @@
+name: Distribution packages
+
+# Po opublikowaniu wydania wysyła MapSticka do Ubuntu (PPA na Launchpadzie)
+# i Fedory (Copr). Oba serwisy budują bez sieci, więc wszystko zaczyna się od
+# archiwum źródeł ze wszystkimi skrzynkami Rusta (packaging/source-tarball.sh).
+#
+# Zanim cokolwiek wyjdzie, każdy pakiet jest budowany tutaj w kontenerze
+# danego systemu, z odciętą siecią, instalowany na czysto i uruchamiany
+# (`mapstick --version`) — błąd zatrzymuje wysyłkę dla tego systemu.
+# Wersje Ubuntu biorą się z Launchpada (wszystkie wspierane od MIN_UBUNTU),
+# więc nowe wydanie Ubuntu wchodzi samo.
+#
+# Ręcznie (Actions → Distribution packages → Run workflow): ten sam przebieg
+# dla wskazanego wydania. Bez „publish” tylko buduje i sprawdza.
+#
+# Ustawienia repozytorium (Settings → Secrets and variables → Actions):
+#   zmienna PPA              np. ppa:miq/mapstick — bez niej nic nie idzie na Launchpada
+#   sekret  PPA_GPG_KEY      prywatny klucz OpenPGP (bez hasła) zarejestrowany na Launchpadzie
+#   sekret  COPR_WEBHOOK_URL adres webhooka „custom” pakietu mapstick w Copr
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (empty: the latest release)"
+        required: false
+      ppa_revision:
+        description: "PPA revision — raise it to upload the same release again with packaging fixes"
+        default: "1"
+      publish:
+        description: "Upload to the PPA and Copr (otherwise only build and test)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  MIN_UBUNTU: "22.04"
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      publish: ${{ steps.release.outputs.publish }}
+      revision: ${{ steps.release.outputs.revision }}
+      series: ${{ steps.series.outputs.series }}
+      oldest: ${{ steps.series.outputs.oldest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          PUBLISH: ${{ github.event_name == 'release' || inputs.publish }}
+          REVISION: ${{ inputs.ppa_revision || '1' }}
+        run: |
+          tag=${TAG:-$(gh release view --json tagName -q .tagName)}
+          {
+            echo "tag=$tag"
+            echo "version=${tag#v}"
+            echo "publish=$PUBLISH"
+            echo "revision=$REVISION"
+          } >> "$GITHUB_OUTPUT"
+          echo "MapStick $tag, PPA revision $REVISION, publish: $PUBLISH" >> "$GITHUB_STEP_SUMMARY"
+
+      # Z wydania, jeśli już tam jest (release.yml dokłada je do każdego
+      # nowego), inaczej zbudowane tutaj — dla wydań sprzed tego przepływu.
+      - name: Source archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          name="mapstick-$VERSION-vendored.tar.xz"
+          if gh release download "$TAG" --pattern "$name" --dir dist; then
+            echo "Source archive: from the release" >> "$GITHUB_STEP_SUMMARY"
+          else
+            packaging/source-tarball.sh "$TAG" dist
+            echo "Source archive: built here" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          sha256sum dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source
+          path: dist/*-vendored.tar.xz
+
+      - name: Ubuntu releases
+        id: series
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_OUTPUT"
+          import json, os, urllib.request
+          minimum = tuple(map(int, os.environ["MIN_UBUNTU"].split(".")))
+          entries = json.load(urllib.request.urlopen("https://api.launchpad.net/devel/ubuntu/series"))["entries"]
+          series = sorted(
+              (tuple(map(int, e["version"].split("."))), e["name"])
+              for e in entries
+              if e["status"] in ("Supported", "Current Stable Release")
+          )
+          names = [name for version, name in series if version >= minimum]
+          print("series=" + json.dumps(names))
+          print("oldest=" + names[0])
+          EOF
+          cat "$GITHUB_OUTPUT"
+
+  ubuntu:
+    needs: source
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        series: ${{ fromJSON(needs.source.outputs.series) }}
+    env:
+      SERIES: ${{ matrix.series }}
+      REVISION: ${{ needs.source.outputs.revision }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: source
+          path: dist
+
+      # Pakiet źródłowy powstaje w kontenerze tej wersji Ubuntu: tylko tam
+      # wiadomo, który Rust jest dostępny (packaging/debian-source.sh).
+      - name: Source package
+        run: |
+          docker run --name prepare -v "$PWD:/w" -w /w "ubuntu:$SERIES" bash -euc '
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -q
+            apt-get install -qy --no-install-recommends dpkg-dev debhelper
+            packaging/debian-source.sh dist/*-vendored.tar.xz "$0" out
+            apt-get build-dep -qy ./out/*.dsc
+          ' "$REVISION"
+          docker commit prepare build-env
+          sudo chown -R "$(id -u):$(id -g)" out
+          grep -E "^(Version|Build-Depends):" out/*.dsc
+
+      - name: Build without network
+        run: |
+          docker run --rm --network none -v "$PWD:/w" build-env bash -euc '
+            mkdir /build && cd /build
+            dpkg-source -x /w/out/*.dsc src
+            cd src
+            DEB_BUILD_OPTIONS="parallel=$(nproc)" dpkg-buildpackage -b -us -uc
+            cp ../*.deb /w/out/
+          '
+          sudo chown -R "$(id -u):$(id -g)" out
+          dpkg-deb --info out/mapstick_*.deb | grep -E "Version|Depends"
+          dpkg-deb --contents out/mapstick_*.deb
+
+      - name: Install and run
+        run: |
+          docker run --rm -v "$PWD:/w" "ubuntu:$SERIES" bash -euc '
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -q
+            apt-get install -qy /w/out/mapstick_*.deb
+            mapstick --version
+          '
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ubuntu-${{ matrix.series }}
+          path: out/
+
+      - name: Upload to the PPA
+        if: needs.source.outputs.publish == 'true' && vars.PPA != ''
+        env:
+          PPA: ${{ vars.PPA }}
+          PPA_GPG_KEY: ${{ secrets.PPA_GPG_KEY }}
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -qy --no-install-recommends devscripts dput
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          install -d -m 700 "$GNUPGHOME"
+          printf '%s\n' "$PPA_GPG_KEY" | gpg --batch --import
+          key=$(gpg --list-secret-keys --with-colons | awk -F: '$1 == "fpr" { print $10; exit }')
+          debsign --no-conf -k"$key" out/*_source.changes
+          dput --unchecked "$PPA" out/*_source.changes
+          echo "Ubuntu $SERIES: uploaded to $PPA" >> "$GITHUB_STEP_SUMMARY"
+
+      # Dla Debiana i dystrybucji bez PPA: paczka z najstarszego wspieranego
+      # Ubuntu, więc zadziała też na nowszych systemach.
+      - name: Attach the .deb to the release
+        if: needs.source.outputs.publish == 'true' && matrix.series == needs.source.outputs.oldest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.source.outputs.tag }}
+          VERSION: ${{ needs.source.outputs.version }}
+        run: |
+          arch=$(dpkg-deb --field out/mapstick_*.deb Architecture)
+          cp out/mapstick_*.deb "mapstick_${VERSION}_$arch.deb"
+          gh release upload "$TAG" "mapstick_${VERSION}_$arch.deb" --clobber
+
+  fedora:
+    needs: source
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.source.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: source
+          path: dist
+
+      - name: Build without network
+        run: |
+          docker run --name prepare -v "$PWD:/w" -w /w fedora:latest bash -euc '
+            dnf -y -q install rpm-build "dnf-command(builddep)"
+            mkdir -p ~/rpmbuild/SOURCES ~/rpmbuild/SPECS
+            sed "s/^Version:.*/Version:        $0/" packaging/fedora/mapstick.spec > ~/rpmbuild/SPECS/mapstick.spec
+            cp dist/*-vendored.tar.xz ~/rpmbuild/SOURCES/
+            dnf -y -q builddep ~/rpmbuild/SPECS/mapstick.spec
+          ' "$VERSION"
+          docker commit prepare build-env
+          mkdir -p out
+          docker run --rm --network none -v "$PWD:/w" build-env bash -euc '
+            rpmbuild -ba ~/rpmbuild/SPECS/mapstick.spec
+            cp ~/rpmbuild/RPMS/*/*.rpm ~/rpmbuild/SRPMS/*.rpm /w/out/
+          '
+          sudo chown -R "$(id -u):$(id -g)" out
+          ls -l out
+
+      - name: Install and run
+        run: |
+          docker run --rm -v "$PWD:/w" fedora:latest bash -euc '
+            dnf -y -q install /w/out/mapstick-[0-9]*.x86_64.rpm
+            rpm -q --requires mapstick
+            mapstick --version
+          '
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fedora
+          path: out/
+
+  copr:
+    needs: [source, fedora]
+    if: needs.source.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: source
+          path: dist
+
+      # Copr pobiera archiwum z wydania (packaging/copr/custom-script.sh).
+      - name: Attach the source archive to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.source.outputs.tag }}
+        run: |
+          name=$(basename dist/*-vendored.tar.xz)
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' | grep -qxF "$name"; then
+            echo "$name is already in the release"
+          else
+            gh release upload "$TAG" "dist/$name" --repo "$GITHUB_REPOSITORY"
+          fi
+
+      - name: Start the Copr build
+        env:
+          COPR_WEBHOOK_URL: ${{ secrets.COPR_WEBHOOK_URL }}
+        run: |
+          if [ -z "$COPR_WEBHOOK_URL" ]; then
+            echo "COPR_WEBHOOK_URL is not set — Copr skipped" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          curl -fsS -X POST "$COPR_WEBHOOK_URL"
+          echo "Copr build started" >> "$GITHUB_STEP_SUMMARY"

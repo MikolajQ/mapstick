@@ -2,7 +2,7 @@ name: Release
 
 # Na tag v* buduje paczki dla Linuksa i Windows i zakłada z nich WERSJĘ
 # ROBOCZĄ wydania. Publikuje człowiek, po obejrzeniu — nic nie wychodzi do
-# ludzi samo.
+# ludzi samo. Opublikowanie wydania uruchamia distro.yml (PPA i Copr).
 
 on:
   push:
@@ -75,8 +75,25 @@ jobs:
             dist/*.zip
             dist/*-setup.exe
 
+  # Źródła ze wszystkimi skrzynkami Rusta — z nich budują Launchpad i Copr,
+  # które nie mają sieci (distro.yml).
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Source archive
+        run: packaging/source-tarball.sh "$GITHUB_REF_NAME" dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source
+          path: dist/*-vendored.tar.xz
+
   release:
-    needs: [linux, windows]
+    needs: [linux, windows, source]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
