@@ -189,7 +189,7 @@ fn usable(disks: Vec<Disk>) -> Vec<Medium> {
 
         if let Err(reason) = check_drive(&facts(&disk)) {
             tracing::debug!(
-                "Pomijam {drive_id} ({}): {}",
+                "Skipping {drive_id} ({}): {}",
                 disk.friendly_name,
                 reason.reason()
             );

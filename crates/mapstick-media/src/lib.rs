@@ -21,32 +21,32 @@ use windows as backend;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Nie udało się odczytać katalogu {0:?}")]
+    #[error("Could not read the folder {0:?}")]
     ReadDir(PathBuf, #[source] std::io::Error),
-    #[error("Nie udało się odczytać pliku {0:?}")]
+    #[error("Could not read the file {0:?}")]
     ReadFile(PathBuf, #[source] std::io::Error),
-    #[error("Katalog {0:?} zawiera {1} plików .ver zamiast jednego")]
+    #[error("The folder {0:?} holds {1} .ver files instead of one")]
     VerFileCount(PathBuf, usize),
-    #[error("Niepoprawny plik .ver: {0:?}")]
+    #[error("Invalid .ver file: {0:?}")]
     InvalidVerFile(PathBuf, #[source] nudl::version::Error),
-    #[error("Nie udało się sprawdzić miejsca w {0:?}")]
+    #[error("Could not check the free space in {0:?}")]
     Space(PathBuf, #[source] std::io::Error),
-    #[error("Nośnik {0} nie jest zamontowany")]
+    #[error("The medium {0} is not mounted")]
     NotMounted(String),
-    #[error("Odmowa: {0} zawiera dane systemu i nie może być celem")]
+    #[error("Refused: {0} holds system data and cannot be a target")]
     SystemDisk(String),
-    #[error("Błąd komunikacji z usługą dysków")]
+    #[error("Could not talk to the disk service")]
     Backend(#[source] Box<dyn std::error::Error + Send + Sync>),
     /// Usługa odpowiedziała, ale odmówiła wykonania — z własnym uzasadnieniem.
     /// Pokazujemy je wprost: „Device or resource busy” mówi użytkownikowi
     /// więcej niż cokolwiek, co moglibyśmy wymyślić w zastępstwie.
-    #[error("Usługa dysków odmówiła: {0}")]
+    #[error("The disk service refused: {0}")]
     Service(String),
     /// Użytkownik zamknął systemowe okno z pytaniem o uprawnienia (UAC,
     /// polkit). Osobno od `Service`, bo to nie błąd, tylko decyzja.
-    #[error("Anulowano w oknie uprawnień")]
+    #[error("Cancelled in the permission prompt")]
     Cancelled,
-    #[error("Ta platforma nie jest jeszcze obsługiwana")]
+    #[error("This system is not supported yet")]
     Unsupported,
 }
 
@@ -169,10 +169,10 @@ pub enum Rejection {
 impl Rejection {
     pub fn reason(self) -> &'static str {
         match self {
-            Self::Internal => "napęd wewnętrzny",
-            Self::SystemMount => "zamontowany poza katalogami nośników użytkownika",
-            Self::SystemHint => "oznaczony przez system jako systemowy",
-            Self::EfiPartition => "zawiera partycję rozruchową EFI",
+            Self::Internal => "internal drive",
+            Self::SystemMount => "mounted outside the user's media folders",
+            Self::SystemHint => "marked by the system as a system drive",
+            Self::EfiPartition => "holds an EFI system partition",
         }
     }
 }

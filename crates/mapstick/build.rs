@@ -72,7 +72,7 @@ fn generate(lang_dir: &Path) -> String {
     // angielsku. Lepiej, żeby build padł od razu.
     assert!(
         !languages.is_empty(),
-        "Brak tłumaczeń w {} — build bez nich dałby program tylko po angielsku",
+        "No translations in {} — without them MapStick would speak English only",
         lang_dir.display()
     );
 

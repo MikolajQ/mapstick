@@ -12,43 +12,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let media = runtime.block_on(mapstick_media::list_media())?;
 
     if media.is_empty() {
-        println!("Brak nośników nadających się na cel.");
+        println!("No media fit to be a target.");
         return Ok(());
     }
 
     for m in &media {
         println!("{} — {}", m.id, m.label);
-        println!("  magistrala:   {}", m.connection.as_deref().unwrap_or("?"));
+        println!("  bus:          {}", m.connection.as_deref().unwrap_or("?"));
         println!(
-            "  system plików:{} {}",
-            m.filesystem.as_deref().unwrap_or("brak"),
+            "  file system:  {} {}",
+            m.filesystem.as_deref().unwrap_or("none"),
             if m.is_exfat() {
                 "(exFAT OK)"
             } else {
-                "(wymaga formatowania)"
+                "(needs formatting)"
             }
         );
         println!(
-            "  zamontowany:  {}",
+            "  mounted:      {}",
             m.mount_point
                 .as_ref()
                 .map(|p| p.display().to_string())
-                .unwrap_or("nie".into())
+                .unwrap_or("no".into())
         );
         println!(
-            "  pojemność:    {} B, wolne {} B",
+            "  capacity:     {} B, {} B free",
             m.total_bytes, m.free_bytes
         );
-        println!("  zmieści 25 GiB? {}", m.fits(27_377_719_742));
+        println!("  fits 25 GiB? {}", m.fits(27_377_719_742));
 
         if let Some(mount) = &m.mount_point {
             match mapstick_media::read_installed(mount) {
                 Ok(Some(i)) => println!(
-                    "  znaleziony firmware: {} {} (marka {})",
+                    "  firmware found: {} {} (brand {})",
                     i.model_id, i.firmware_version, i.brand
                 ),
-                Ok(None) => println!("  znaleziony firmware: brak pliku .ver"),
-                Err(e) => println!("  znaleziony firmware: błąd odczytu — {e}"),
+                Ok(None) => println!("  firmware found: no .ver file"),
+                Err(e) => println!("  firmware found: read error — {e}"),
             }
         }
     }

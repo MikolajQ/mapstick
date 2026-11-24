@@ -195,10 +195,10 @@ pub async fn search(
 
     let candidates = parse(brand, region, &text)?;
     tracing::info!(
-        "VIN w {brand}/{region}: {}",
+        "VIN in {brand}/{region}: {}",
         match &candidates {
-            Some(c) => format!("{} kandydatów", c.len()),
-            None => "nieznany".to_owned(),
+            Some(c) => format!("{} candidates", c.len()),
+            None => "unknown".to_owned(),
         }
     );
 
@@ -215,7 +215,7 @@ fn parse(brand: &str, region: &str, text: &str) -> Result<Option<Vec<Candidate>>
         // Komunikat serwisu przychodzi po koreańsku niezależnie od języka
         // zapytania — pokazujemy kod, a treść zostaje w dzienniku.
         status => {
-            tracing::warn!("Wyszukiwanie VIN: {status} {:?}", response.message);
+            tracing::warn!("VIN search: {status} {:?}", response.message);
             return Err(anyhow!(tr!(
                 "The maker’s VIN search answered with code {}",
                 status

@@ -204,7 +204,7 @@ pub async fn list_media() -> Result<Vec<Medium>> {
             continue;
         };
         if let Err(reason) = check_drive(drive_facts) {
-            tracing::debug!("Pomijam napęd {drive_path}: {}", reason.reason());
+            tracing::debug!("Skipping drive {drive_path}: {}", reason.reason());
             continue;
         }
 
@@ -221,7 +221,7 @@ pub async fn list_media() -> Result<Vec<Medium>> {
             Some(path) => match space_for(path) {
                 Ok(space) => (space.total, space.free),
                 Err(e) => {
-                    tracing::warn!("Nie udało się sprawdzić miejsca na {device}: {e}");
+                    tracing::warn!("Could not check the free space on {device}: {e}");
                     (total_declared, 0)
                 }
             },
@@ -315,7 +315,7 @@ pub async fn mount(medium: &Medium) -> Result<PathBuf> {
         .map_err(backend)?;
 
     let point = filesystem.mount(HashMap::new()).await.map_err(service)?;
-    tracing::info!("Zamontowano {} w {point}", medium.id);
+    tracing::info!("Mounted {} at {point}", medium.id);
 
     Ok(PathBuf::from(point))
 }
@@ -345,15 +345,15 @@ async fn remount(filesystem: &FilesystemProxy<'_>) {
     for attempt in 0..5 {
         match filesystem.mount(HashMap::new()).await {
             Ok(point) => {
-                tracing::info!("Nośnik zamontowany w {point}");
+                tracing::info!("Medium mounted at {point}");
                 return;
             }
             Err(e) => {
-                tracing::debug!("Montowanie po formatowaniu, próba {}: {e}", attempt + 1);
+                tracing::debug!("Mounting after formatting, attempt {}: {e}", attempt + 1);
                 tokio::time::sleep(std::time::Duration::from_millis(400)).await;
             }
         }
     }
 
-    tracing::warn!("Nośnik sformatowany, ale niezamontowany");
+    tracing::warn!("Medium formatted but not mounted");
 }

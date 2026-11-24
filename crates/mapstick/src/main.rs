@@ -248,7 +248,7 @@ fn remove_partial_archives(directory: &Path) -> u64 {
 
         match std::fs::remove_file(&path) {
             Ok(()) => freed += size,
-            Err(e) => tracing::warn!("Nie udało się usunąć {}: {e}", path.display()),
+            Err(e) => tracing::warn!("Could not remove {}: {e}", path.display()),
         }
     }
 
@@ -269,7 +269,7 @@ fn medium_label(medium: &Medium) -> String {
 /// Błąd do pokazania w oknie, w języku okna.
 ///
 /// `mapstick-media` i `mapstick-store` nie mają tłumaczeń — opisują błędy
-/// po polsku, na potrzeby dziennika — więc ich warianty tłumaczymy tutaj.
+/// po angielsku, na potrzeby dziennika — więc ich warianty tłumaczymy tutaj.
 /// Resztę (nudl, system) pokazujemy tak, jak przyszła: komunikaty Windows
 /// i tak są w języku systemu.
 fn describe(error: &(dyn std::error::Error + 'static)) -> String {
@@ -403,7 +403,7 @@ async fn fetch_entries_now(brand_code: &str, region: &str) -> Result<Vec<Entry>>
                 media,
                 released,
             }),
-            Err(e) => tracing::warn!("Pomijam pojazd o nieoczekiwanych danych: {e}"),
+            Err(e) => tracing::warn!("Skipping a vehicle with unexpected data: {e}"),
         }
     }
 
@@ -548,7 +548,7 @@ impl Worker {
 
     fn save_store(&self) {
         if let Err(e) = self.store.save(&self.store_path) {
-            tracing::warn!("Nie udało się zapisać ulubionych: {e}");
+            tracing::warn!("Could not save the favourites: {e}");
         }
     }
 
@@ -1017,7 +1017,7 @@ impl Worker {
                                 released: Some(e.released).filter(|r| !r.is_empty()),
                             }),
                     ),
-                    Err(e) => tracing::warn!("Nie udało się sprawdzić {brand}/{region}: {e}"),
+                    Err(e) => tracing::warn!("Could not check {brand}/{region}: {e}"),
                 }
             }
 
@@ -1076,10 +1076,10 @@ impl Worker {
     async fn load_models(&mut self, brand: usize, region: usize) -> Result<()> {
         self.brand = *BRANDS
             .get(brand)
-            .ok_or_else(|| anyhow!("Nieznana marka o indeksie {brand}"))?;
+            .ok_or_else(|| anyhow!("Unknown brand at index {brand}"))?;
         self.region = REGIONS
             .get(region)
-            .ok_or_else(|| anyhow!("Nieznany region o indeksie {region}"))?
+            .ok_or_else(|| anyhow!("Unknown region at index {region}"))?
             .0
             .to_owned();
 
@@ -1182,7 +1182,7 @@ impl Worker {
 
         let (download, extracted) = firmware_totals(&firmware);
         tracing::info!(
-            "{}: do pobrania {download} B, na nośniku {extracted} B, plików {}",
+            "{}: {download} B to download, {extracted} B on the medium, {} files",
             self.entries[index].car.id,
             firmware.files.len()
         );
@@ -1257,7 +1257,7 @@ impl Worker {
             _ => false,
         };
 
-        tracing::info!("cel zawiera bieżącą wersję: {current}");
+        tracing::info!("target holds the current version: {current}");
 
         // Katalog na dysku z gotową bieżącą wersją zapamiętujemy, choćby nie
         // wziął się z naszego pobierania — użytkownik mógł go wskazać sam.
@@ -1313,7 +1313,7 @@ impl Worker {
             return;
         }
 
-        tracing::info!("{}: gotowe pliki znalezione w {}", car.id, path.display());
+        tracing::info!("{}: ready files found in {}", car.id, path.display());
 
         self.store.record_download(Download {
             model_id: car.id.clone(),
@@ -1400,10 +1400,10 @@ impl Worker {
             .unwrap_or_default();
 
         tracing::info!(
-            "gotowe dane na dysku twardym: {} → {}",
-            if shown.is_empty() { "brak" } else { &shown },
+            "ready data on the disk: {} → {}",
+            if shown.is_empty() { "none" } else { &shown },
             if onto.is_empty() {
-                "nie ma dokąd"
+                "nowhere to copy"
             } else {
                 &onto
             }
@@ -1426,7 +1426,7 @@ impl Worker {
         }
 
         tracing::info!(
-            "{}: {} zapisane w {}",
+            "{}: {} saved in {}",
             record.model_id,
             record.version,
             record.path.display()
@@ -1544,7 +1544,7 @@ impl Worker {
         if let Err(e) = std::fs::remove_file(&manifest)
             && e.kind() != std::io::ErrorKind::NotFound
         {
-            tracing::warn!("Nie udało się usunąć {}: {e}", manifest.display());
+            tracing::warn!("Could not remove {}: {e}", manifest.display());
         }
 
         // Wpis o gotowym pobraniu opisywał to, co przed chwilą skasowaliśmy.
@@ -1558,7 +1558,7 @@ impl Worker {
         }
 
         tracing::info!(
-            "Ponowne pobranie {model_id}: usunięto {removed} plików ({bytes} B) z {}",
+            "Downloading {model_id} again: removed {removed} files ({bytes} B) from {}",
             target.display()
         );
 
@@ -1579,7 +1579,7 @@ impl Worker {
 
         if swept.directories > 0 {
             tracing::info!(
-                "Sprzątnięto {} katalogów archiwów, odzyskane {} B",
+                "Swept {} archive folders, freed {} B",
                 swept.directories,
                 swept.bytes
             );
@@ -1596,7 +1596,7 @@ impl Worker {
             String::new()
         };
 
-        tracing::info!("pozostałości archiwów: {} B", size);
+        tracing::info!("archive leftovers: {} B", size);
         self.with_ui(move |ui| ui.set_leftovers(text.into()));
     }
 
@@ -1887,7 +1887,7 @@ impl Worker {
                 changed = true;
 
                 tracing::info!(
-                    "{}: wersja w aucie odczytana z nośnika — {}",
+                    "{}: version in the car read from the medium — {}",
                     installed.model_id,
                     installed.firmware_version
                 );
@@ -2083,7 +2083,7 @@ impl Worker {
     /// Przychodzi tu wynik okna wyboru — i to samo robi `MAPSTICK_DEV_CEL`
     /// przy testach na maszynie bez myszy.
     fn use_directory(&mut self, path: PathBuf) {
-        tracing::info!("Cel wskazany ręcznie: {}", path.display());
+        tracing::info!("Target chosen by hand: {}", path.display());
 
         self.forget_pause();
 
@@ -2261,7 +2261,7 @@ impl Worker {
                     )
                 };
 
-                tracing::debug!("pasek: {text}");
+                tracing::debug!("progress: {text}");
 
                 let _ = ui.upgrade_in_event_loop(move |ui| {
                     ui.set_progress(fraction);
@@ -2292,9 +2292,9 @@ impl Worker {
             if let Some(work) = &cleanup {
                 if succeeded {
                     match std::fs::remove_dir_all(work) {
-                        Ok(()) => tracing::info!("Usunięto archiwa z {}", work.display()),
+                        Ok(()) => tracing::info!("Removed the archives from {}", work.display()),
                         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                        Err(e) => tracing::warn!("Nie udało się usunąć archiwów: {e}"),
+                        Err(e) => tracing::warn!("Could not remove the archives: {e}"),
                     }
                 } else {
                     let size = cache::directory_size(work);
@@ -2310,7 +2310,7 @@ impl Worker {
             if succeeded && !stale.is_empty() {
                 let count = stale::remove(&output, &stale);
                 tracing::info!(
-                    "Usunięto {count} plików poprzedniego wydania ({} B) z {}",
+                    "Removed {count} files of the previous release ({} B) from {}",
                     stale.bytes,
                     output.display()
                 );
@@ -2434,7 +2434,7 @@ impl Worker {
                 if !stale.is_empty() {
                     let count = stale::remove(&target, &stale);
                     tracing::info!(
-                        "Usunięto {count} plików poprzedniego wydania ({} B)",
+                        "Removed {count} files of the previous release ({} B)",
                         stale.bytes
                     );
                 }
@@ -2506,7 +2506,7 @@ impl Worker {
     /// Przerwanie polega na porzuceniu przyszłości pobierania — nudl zapisuje
     /// postęp na bieżąco, więc wznowienie sprowadza się do ponownego startu.
     fn cancel(&mut self) {
-        tracing::info!("Wstrzymane na życzenie");
+        tracing::info!("Paused on request");
 
         // Kopiowanie jest blokujące — `abort()` by go nie zatrzymał, więc
         // podnosimy flagę i czekamy, aż zauważy ją sama pętla kopiująca.
@@ -2554,7 +2554,7 @@ impl Worker {
             if let Err(e) = std::fs::remove_dir_all(work)
                 && e.kind() != std::io::ErrorKind::NotFound
             {
-                tracing::warn!("Nie udało się usunąć {}: {e}", work.display());
+                tracing::warn!("Could not remove {}: {e}", work.display());
             }
 
             // Katalog modelu bez żadnej wersji w środku nie ma po co zostawać.
@@ -2577,11 +2577,11 @@ impl Worker {
         if let Err(e) = std::fs::remove_file(&manifest)
             && e.kind() != std::io::ErrorKind::NotFound
         {
-            tracing::warn!("Nie udało się usunąć {}: {e}", manifest.display());
+            tracing::warn!("Could not remove {}: {e}", manifest.display());
         }
 
         tracing::info!(
-            "Pobranie {} anulowane, odzyskane {freed} B",
+            "Download of {} cancelled, freed {freed} B",
             footprint.model_id
         );
 
@@ -2607,7 +2607,7 @@ impl Worker {
     async fn startup(&mut self, restore: bool) {
         let freed = cache::migrate();
         if freed > 0 {
-            tracing::info!("Usunięto archiwa w starym układzie: {freed} B");
+            tracing::info!("Removed the archives in the old layout: {freed} B");
         }
 
         // Po samym czasie — pełnych spisów wersji jeszcze nie mamy.
@@ -2630,15 +2630,15 @@ impl Worker {
         // i trwa ułamek sekundy.
         if self.store.watched().next().is_some() {
             match schedule::install(self.store.check_interval) {
-                Ok(kind) => tracing::info!("Harmonogram odświeżony: {}", kind.label()),
-                Err(e) => tracing::warn!("Nie udało się odświeżyć harmonogramu: {e:#}"),
+                Ok(kind) => tracing::info!("Schedule refreshed: {}", kind.label()),
+                Err(e) => tracing::warn!("Could not refresh the schedule: {e:#}"),
             }
         }
 
         self.spawn_favourite_refresh();
 
         self.link_table = link::Table::load();
-        tracing::info!("Tablica odnośników: {} wpisów", self.link_table.links.len());
+        tracing::info!("Link table: {} entries", self.link_table.links.len());
         let stale: Vec<_> = self
             .combos_in_use()
             .into_iter()
@@ -2719,7 +2719,7 @@ impl Worker {
                         found.append(&mut links);
                         answered.push((brand, region));
                     }
-                    Err(e) => tracing::warn!("Odnośniki {brand}/{region}: {e}"),
+                    Err(e) => tracing::warn!("Links {brand}/{region}: {e}"),
                 }
             }
 
@@ -2739,12 +2739,12 @@ impl Worker {
 
         let added = self.link_table.merge(found);
         tracing::info!(
-            "Tablica odnośników: {} wpisów ({added} nowych)",
+            "Link table: {} entries ({added} new)",
             self.link_table.links.len()
         );
 
         if let Err(e) = self.link_table.save() {
-            tracing::warn!("Nie udało się zapisać tablicy odnośników: {e}");
+            tracing::warn!("Could not save the link table: {e}");
         }
     }
 
@@ -2784,7 +2784,7 @@ impl Worker {
         for region in &regions {
             match link::collect(brand, code, region).await {
                 Ok(found) => self.apply_links(found, &[(brand.to_owned(), region.clone())]),
-                Err(e) => tracing::warn!("Odnośniki {brand}/{region}: {e}"),
+                Err(e) => tracing::warn!("Links {brand}/{region}: {e}"),
             }
 
             if let Some(target) = self.link_table.find(&url).cloned() {
@@ -2821,7 +2821,7 @@ impl Worker {
         self.set_busy(true);
 
         tracing::info!(
-            "Odnośnik wskazuje {} ({}), {}",
+            "Link points to {} ({}), {}",
             target.name,
             target.mcode,
             target.version
@@ -3149,7 +3149,7 @@ fn main() -> Result<()> {
     // kto po prostu woli inny język niż ten, który ma ustawiony pulpit.
     let preferred = std::env::var("MAPSTICK_LANG").ok();
     let language = i18n::choose(preferred.as_deref());
-    tracing::info!("Język interfejsu: {}", language.unwrap_or("en (domyślny)"));
+    tracing::info!("Interface language: {}", language.unwrap_or("en (default)"));
 
     instance::announce_running();
 
@@ -3185,7 +3185,7 @@ fn main() -> Result<()> {
     // znajduje ikonę i nazwę aplikacji dla paska zadań.
     #[cfg(target_os = "linux")]
     if let Err(e) = slint::set_xdg_app_id("mapstick") {
-        tracing::debug!("Bez identyfikatora aplikacji: {e}");
+        tracing::debug!("No application ID: {e}");
     }
 
     let ui = AppWindow::new()?;
@@ -3230,7 +3230,7 @@ fn main() -> Result<()> {
                 .worker_threads(2)
                 .enable_all()
                 .build()
-                .expect("Nie udało się uruchomić środowiska tokio");
+                .expect("Could not start the tokio runtime");
 
             runtime.block_on(Worker::new(weak, worker_tx).run(rx));
         })?;
@@ -3425,7 +3425,7 @@ fn fit_on_screen(ui: &AppWindow) {
     });
 
     if let Err(e) = spawned {
-        tracing::debug!("Nie dopasuję okna do ekranu: {e}");
+        tracing::debug!("Could not fit the window to the screen: {e}");
     }
 }
 
@@ -3452,7 +3452,7 @@ fn needs_software_renderer(error: &slint::PlatformError) -> bool {
 fn relaunch_with_software_renderer(error: &slint::PlatformError) -> Result<()> {
     use anyhow::Context as _;
 
-    tracing::warn!("Brak używalnego OpenGL ({error}), uruchamiam z rendererem programowym");
+    tracing::warn!("No usable OpenGL ({error}), starting with the software renderer");
 
     std::process::Command::new(std::env::current_exe()?)
         .args(std::env::args_os().skip(1))
@@ -3516,12 +3516,12 @@ fn wire_callbacks(ui: &AppWindow, tx: UnboundedSender<Cmd>) {
                 Some(dir) => {
                     let _ = t.send(Cmd::UseDirectory(dir.path().to_path_buf()));
                 }
-                None => tracing::info!("Wybór katalogu anulowany"),
+                None => tracing::info!("Folder selection cancelled"),
             }
         });
 
         if let Err(e) = spawned {
-            tracing::warn!("Nie udało się otworzyć okna wyboru katalogu: {e}");
+            tracing::warn!("Could not open the folder picker: {e}");
         }
     });
 

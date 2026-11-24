@@ -104,7 +104,7 @@ impl Table {
         };
 
         serde_json::from_str(&text).unwrap_or_else(|e| {
-            tracing::warn!("Tablica odnośników nie do odczytania: {e}");
+            tracing::warn!("Could not read the link table: {e}");
             Self::default()
         })
     }
@@ -217,7 +217,7 @@ pub async fn collect(brand: &str, code: &str, region: &str) -> Result<Vec<(Strin
         .with_context(|| tr!("Unexpected response from {}", url))?;
 
     let files = file_urls(&catalogue);
-    tracing::info!("{brand}/{region}: {} plików z wersjami", files.len());
+    tracing::info!("{brand}/{region}: {} files with versions", files.len());
 
     let mut found = Vec::new();
 

@@ -11,11 +11,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Nie udało się odczytać {0:?}")]
+    #[error("Could not read {0:?}")]
     Read(PathBuf, #[source] std::io::Error),
-    #[error("Nie udało się zapisać {0:?}")]
+    #[error("Could not write {0:?}")]
     Write(PathBuf, #[source] std::io::Error),
-    #[error("Niepoprawny format pliku {0:?}")]
+    #[error("The file {0:?} has an invalid format")]
     Parse(PathBuf, #[source] serde_json::Error),
 }
 
@@ -354,8 +354,7 @@ impl Store {
             std::fs::create_dir_all(parent).map_err(|e| Error::Write(parent.to_owned(), e))?;
         }
 
-        let text = serde_json::to_string_pretty(self)
-            .expect("Struktura ulubionych zawsze się serializuje");
+        let text = serde_json::to_string_pretty(self).expect("The favourites always serialize");
 
         let temp = path.with_extension("json.tmp");
         std::fs::write(&temp, text).map_err(|e| Error::Write(temp.clone(), e))?;
@@ -435,7 +434,7 @@ pub fn adopt_legacy(old: &Path, new: &Path) {
     if let Err(e) = std::fs::rename(old, new) {
         // Pierwszeństwo ma działający program: najwyżej zacznie od zera.
         eprintln!(
-            "MapStick: nie przeniosę {} do {}: {e}",
+            "MapStick: could not move {} to {}: {e}",
             old.display(),
             new.display()
         );

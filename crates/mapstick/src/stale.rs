@@ -49,7 +49,10 @@ pub fn find(target: &Path, model_id: &str, keep: &HashSet<String>) -> Stale {
     };
 
     let Ok(info) = text.parse::<VersionInfo>() else {
-        tracing::warn!("Nie rozumiem {} — nie ruszam niczego", manifest.display());
+        tracing::warn!(
+            "Cannot parse {} — leaving everything in place",
+            manifest.display()
+        );
         return Stale::default();
     };
 
@@ -93,7 +96,7 @@ pub fn remove(target: &Path, stale: &Stale) -> usize {
                 removed += 1;
                 prune_empty(target, path.parent());
             }
-            Err(e) => tracing::warn!("Nie udało się usunąć {}: {e}", path.display()),
+            Err(e) => tracing::warn!("Could not remove {}: {e}", path.display()),
         }
     }
 

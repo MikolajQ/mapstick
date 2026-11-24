@@ -122,7 +122,7 @@ fn migrate_in(base: &Path) -> u64 {
     // archiwa za pozostałość starego układu.
     if !base.exists() {
         if let Err(e) = std::fs::create_dir_all(base).and_then(|()| std::fs::write(&marker, b"")) {
-            tracing::warn!("Nie udało się zapisać znacznika układu: {e}");
+            tracing::warn!("Could not write the layout marker: {e}");
         }
         return 0;
     }
@@ -134,12 +134,12 @@ fn migrate_in(base: &Path) -> u64 {
     let freed = directory_size(base);
 
     if let Err(e) = std::fs::remove_dir_all(base) {
-        tracing::warn!("Nie udało się usunąć starego układu archiwów: {e}");
+        tracing::warn!("Could not remove the old archive layout: {e}");
         return 0;
     }
 
     if let Err(e) = std::fs::create_dir_all(base).and_then(|()| std::fs::write(&marker, b"")) {
-        tracing::warn!("Nie udało się zapisać znacznika układu: {e}");
+        tracing::warn!("Could not write the layout marker: {e}");
     }
 
     freed
@@ -208,20 +208,20 @@ fn sweep_in(base: &Path, known: &HashMap<String, Vec<String>>, max_age: Duration
             match std::fs::remove_dir_all(&path) {
                 Ok(()) => {
                     tracing::info!(
-                        "Usunięto archiwa {}/{} ({}) — {}",
+                        "Removed the archives {}/{} ({} B) — {}",
                         model_name,
                         name,
                         size,
                         if superseded {
-                            "wersja już nieaktualna"
+                            "version superseded"
                         } else {
-                            "leżą od pół roku"
+                            "unused for half a year"
                         }
                     );
                     swept.directories += 1;
                     swept.bytes += size;
                 }
-                Err(e) => tracing::warn!("Nie udało się usunąć {}: {e}", path.display()),
+                Err(e) => tracing::warn!("Could not remove {}: {e}", path.display()),
             }
         }
 

@@ -164,12 +164,12 @@ pub fn run(force: bool) -> Result<()> {
     if let Some(report) = report
         && let Err(e) = notify(&report.summary(), &report.body())
     {
-        tracing::warn!("Nie udało się pokazać meldunku: {e}");
+        tracing::warn!("Could not show the status report: {e}");
     }
 
     for item in news {
         if let Err(e) = announce(&item) {
-            tracing::warn!("Nie udało się pokazać powiadomienia: {e}");
+            tracing::warn!("Could not show the notification: {e}");
         }
     }
 
@@ -186,7 +186,7 @@ async fn gather(force: bool) -> Result<(Option<Report>, Vec<News>)> {
     let mut store = Store::load(&path)?;
 
     if store.watched().next().is_none() {
-        tracing::info!("Żaden model nie jest pilnowany — nie ma czego sprawdzać");
+        tracing::info!("No model is watched — nothing to check");
         return Ok((None, Vec::new()));
     }
 
@@ -195,7 +195,7 @@ async fn gather(force: bool) -> Result<(Option<Report>, Vec<News>)> {
     if force || due(&store, store.check_interval) {
         check(&mut store).await;
     } else {
-        tracing::info!("Producenta pytano niedawno — tylko przypomnienia");
+        tracing::info!("The maker was asked recently — reminders only");
     }
 
     let now = Timestamp::now();
@@ -338,7 +338,7 @@ async fn check(store: &mut Store) {
             Err(e) => {
                 // Pełny łańcuch idzie do dziennika; do meldunku i okna sama
                 // przyczyna — reqwest powtarza w łańcuchu adres po kilka razy.
-                tracing::warn!("Nie udało się sprawdzić {brand}/{region}: {e:#}");
+                tracing::warn!("Could not check {brand}/{region}: {e:#}");
                 errors.push(format!("{brand}/{region}: {}", e.root_cause()));
                 continue;
             }
@@ -446,7 +446,7 @@ fn mark_installed(model_id: &str, version: &str) -> Result<()> {
     favourite.installed_confirmed = true;
 
     store.save(&path)?;
-    tracing::info!("{model_id}: zaznaczone, że auto ma {version}");
+    tracing::info!("{model_id}: marked as installed in the car: {version}");
 
     Ok(())
 }
@@ -509,7 +509,7 @@ fn show(mut notification: notify_rust::Notification, news: &News) -> Result<()> 
             "pokaz" => open_app(&model_id),
             "mam" => {
                 if let Err(e) = mark_installed(&model_id, &version) {
-                    tracing::warn!("Nie udało się zapisać wersji w aucie: {e:#}");
+                    tracing::warn!("Could not save the version in the car: {e:#}");
                 }
             }
             _ => {}
@@ -555,7 +555,7 @@ fn register_app_id() {
         .status();
 
     if !matches!(status, Ok(s) if s.success()) {
-        tracing::warn!("Nie udało się zarejestrować {APP_ID} dla powiadomień: {status:?}");
+        tracing::warn!("Could not register {APP_ID} for notifications: {status:?}");
     }
 }
 
@@ -592,8 +592,8 @@ fn open_app(model_id: &str) {
         .process_group(0)
         .spawn()
     {
-        Ok(_) => tracing::info!("Otwieram {model_id}"),
-        Err(e) => tracing::warn!("Nie udało się otworzyć aplikacji: {e}"),
+        Ok(_) => tracing::info!("Opening {model_id}"),
+        Err(e) => tracing::warn!("Could not open the application: {e}"),
     }
 }
 

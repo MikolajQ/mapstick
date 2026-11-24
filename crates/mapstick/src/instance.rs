@@ -47,7 +47,7 @@ pub fn hand_off(url: &str) -> bool {
     }
 
     let _ = stream.flush();
-    tracing::info!("Odnośnik przekazany działającej instancji");
+    tracing::info!("Link handed over to the running instance");
 
     true
 }
@@ -63,7 +63,7 @@ fn bind(path: &std::path::Path) -> std::io::Result<UnixListener> {
             if UnixStream::connect(path).is_ok() {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::AddrInUse,
-                    "inna instancja już nasłuchuje",
+                    "another instance is already listening",
                 ));
             }
 
@@ -82,7 +82,7 @@ pub fn listen(on_link: impl Fn(String) + Send + 'static) {
     let listener = match bind(&path) {
         Ok(l) => l,
         Err(e) => {
-            tracing::warn!("Nie nasłuchuję odnośników: {e}");
+            tracing::warn!("Not listening for links: {e}");
             return;
         }
     };
@@ -137,7 +137,7 @@ pub fn hand_off(url: &str) -> bool {
     }
 
     let _ = pipe.flush();
-    tracing::info!("Odnośnik przekazany działającej instancji");
+    tracing::info!("Link handed over to the running instance");
 
     true
 }
@@ -184,7 +184,7 @@ pub fn listen(on_link: impl Fn(String) + Send + 'static) {
                             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                         }
                         Err(e) => {
-                            tracing::warn!("Nie nasłuchuję odnośników: {e}");
+                            tracing::warn!("Not listening for links: {e}");
                             return;
                         }
                     }
@@ -201,7 +201,7 @@ pub fn listen(on_link: impl Fn(String) + Send + 'static) {
                     server = match options().create(&name) {
                         Ok(s) => s,
                         Err(e) => {
-                            tracing::warn!("Nasłuch odnośników przerwany: {e}");
+                            tracing::warn!("Stopped listening for links: {e}");
                             return;
                         }
                     };
@@ -247,7 +247,7 @@ pub fn announce_running() {
 
     if handle.is_null() {
         tracing::warn!(
-            "Nie założono mutexu {RUNNING_MUTEX}: {}",
+            "Could not create the {RUNNING_MUTEX} mutex: {}",
             std::io::Error::last_os_error()
         );
     }

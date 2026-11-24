@@ -390,13 +390,13 @@ mod linux {
         if systemd_available() {
             match install_systemd() {
                 Ok(()) => return Ok(Kind::Systemd),
-                Err(e) => tracing::warn!("Timer systemd nie wyszedł: {e}"),
+                Err(e) => tracing::warn!("Could not set up the systemd timer: {e}"),
             }
         }
 
         match crontab_set(Some(&cron_line(interval)?)) {
             Ok(()) => return Ok(Kind::Cron),
-            Err(e) => tracing::warn!("Wpis w cronie nie wyszedł: {e}"),
+            Err(e) => tracing::warn!("Could not set up the cron entry: {e}"),
         }
 
         install_autostart(interval).map(|()| Kind::Autostart)
