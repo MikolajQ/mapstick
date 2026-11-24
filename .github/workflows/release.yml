@@ -3,10 +3,14 @@ name: Release
 # Na tag v* buduje paczki dla Linuksa i Windows i zakłada z nich WERSJĘ
 # ROBOCZĄ wydania. Publikuje człowiek, po obejrzeniu — nic nie wychodzi do
 # ludzi samo. Opublikowanie wydania uruchamia distro.yml (PPA i Copr).
+#
+# Uruchomiony ręcznie (Actions → Release → Run workflow) buduje i sprawdza
+# te same paczki z wybranej gałęzi, bez wydania — tylko jako artefakty.
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -18,18 +22,31 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libfontconfig1-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libinput-dev libudev-dev libwayland-dev libxkbcommon-dev
+          sudo apt-get install -y pkg-config libfontconfig1-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libinput-dev libudev-dev libwayland-dev libxkbcommon-dev zsync
 
       - name: Build
         run: cargo build --release --locked -p mapstick
 
+      # Z tagu; przy próbnym przebiegu z gałęzi np. 0.1.0-3-gb654d14.
+      - name: Version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version=$(git describe --tags --always)
+            version="${version#v}"
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
       - name: Package
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="$VERSION"
           name="mapstick-$version-x86_64-linux"
           mkdir -p "dist/$name/icons"
           cp target/release/mapstick packaging/mapstick.desktop packaging/linux/install.sh \
@@ -37,10 +54,45 @@ jobs:
           cp packaging/icons/mapstick.svg packaging/icons/mapstick-*.png "dist/$name/icons/"
           tar -C dist -czf "dist/$name.tar.gz" "$name"
 
+      # Narzędzie i runtime przypięte do wersji i sum — nic z „continuous”.
+      - name: AppImage
+        env:
+          APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+          RUNTIME_URL: https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
+          RUNTIME_SHA256: 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+        run: |
+          tools="$RUNNER_TEMP/appimage-tools"
+          mkdir -p "$tools"
+          curl -fsSLo "$tools/appimagetool" "$APPIMAGETOOL_URL"
+          curl -fsSLo "$tools/runtime-x86_64" "$RUNTIME_URL"
+          printf '%s  %s\n' "$APPIMAGETOOL_SHA256" "$tools/appimagetool" "$RUNTIME_SHA256" "$tools/runtime-x86_64" | sha256sum -c -
+          chmod +x "$tools/appimagetool"
+          export PATH="$tools:$PATH" RUNTIME="$tools/runtime-x86_64" APPIMAGE_EXTRACT_AND_RUN=1
+          packaging/appimage.sh target/release/mapstick "$VERSION" dist
+
+      # Przez FUSE na runnerze i bez FUSE w czystych systemach, które mają
+      # tylko to, czego wymaga binarka (fontconfig). Ubuntu 22.04 to próg
+      # glibc; Debian 12 i Fedora — systemy bez własnej paczki w PPA.
+      - name: Test the AppImage
+        run: |
+          appimage=$(ls dist/MapStick-*-x86_64.AppImage)
+          chmod +x "$appimage"
+          "$appimage" --version
+          docker run --rm -v "$PWD/dist:/d:ro" ubuntu:22.04 sh -euc \
+            'apt-get update -q >/dev/null && apt-get install -qy libfontconfig1 >/dev/null && /d/'"${appimage##*/}"' --appimage-extract-and-run --version'
+          docker run --rm -v "$PWD/dist:/d:ro" debian:12 sh -euc \
+            'apt-get update -q >/dev/null && apt-get install -qy libfontconfig1 >/dev/null && /d/'"${appimage##*/}"' --appimage-extract-and-run --version'
+          docker run --rm -v "$PWD/dist:/d:ro" fedora:latest sh -euc \
+            'dnf -yq install fontconfig >/dev/null && /d/'"${appimage##*/}"' --appimage-extract-and-run --version'
+
       - uses: actions/upload-artifact@v4
         with:
           name: linux
-          path: dist/*.tar.gz
+          path: |
+            dist/*.tar.gz
+            dist/*.AppImage
+            dist/*.AppImage.zsync
 
   windows:
     runs-on: windows-latest
@@ -53,7 +105,7 @@ jobs:
       - name: Package
         shell: pwsh
         run: |
-          $version = "$env:GITHUB_REF_NAME".TrimStart('v')
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { "$env:GITHUB_REF_NAME".TrimStart('v') } else { 'test' }
           $name = "mapstick-$version-windows-x86_64"
           New-Item -ItemType Directory -Force "dist/$name" | Out-Null
           Copy-Item target/release/mapstick.exe, README.md, README.pl.md "dist/$name/"
@@ -64,7 +116,7 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup --no-progress -y
-          $env:MAPSTICK_VERSION = "$env:GITHUB_REF_NAME".TrimStart('v')
+          $env:MAPSTICK_VERSION = if ($env:GITHUB_REF_TYPE -eq 'tag') { "$env:GITHUB_REF_NAME".TrimStart('v') } else { '0.0.0' }
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" packaging/windows/mapstick.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -93,6 +145,7 @@ jobs:
           path: dist/*-vendored.tar.xz
 
   release:
+    if: github.ref_type == 'tag'
     needs: [linux, windows, source]
     runs-on: ubuntu-latest
     steps:
