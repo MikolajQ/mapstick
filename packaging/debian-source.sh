@@ -11,7 +11,7 @@
 # <ppa revision> goes up when only the packaging changes for the same
 # MapStick release.
 #
-# Rust: MapStick needs 1.88 or newer. When the release's default rustc is
+# Rust: MapStick needs 1.92 or newer (Slint 1.17). When the release's default rustc is
 # older, the newest versioned toolchain (rustc-1.NN, cargo-1.NN) is used.
 #
 # Needs: dpkg-dev, debhelper (for `debian/rules clean`), apt lists present.
@@ -27,7 +27,7 @@ tarball=$(realpath "$1")
 revision=$2
 out=$(realpath -m "$3")
 here=$(cd "$(dirname "$0")" && pwd)
-min_rust=1.88
+min_rust=1.92
 
 # shellcheck source=/dev/null
 . /etc/os-release

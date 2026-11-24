@@ -21,8 +21,8 @@ Source0:        %{url}/releases/download/v%{version}/%{name}-%{version}-vendored
 
 ExclusiveArch:  x86_64 aarch64
 
-BuildRequires:  cargo >= 1.88
-BuildRequires:  rust >= 1.88
+BuildRequires:  cargo >= 1.92
+BuildRequires:  rust >= 1.92
 BuildRequires:  gcc
 BuildRequires:  pkgconfig(fontconfig)
 BuildRequires:  desktop-file-utils

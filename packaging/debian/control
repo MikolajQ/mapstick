@@ -2,12 +2,12 @@ Source: mapstick
 Section: utils
 Priority: optional
 Maintainer: Mikołaj <1713112+MikolajQ@users.noreply.github.com>
-# Ubuntu 22.04 and 24.04 ship a Rust that is too old by default; for them
+# Ubuntu 24.04 ships a Rust that is too old by default; for it
 # packaging/debian-source.sh swaps these two for versioned toolchains such
-# as cargo-1.91 and rustc-1.91, which debian/rules then puts first in PATH.
+# as cargo-1.97 and rustc-1.97, which debian/rules then puts first in PATH.
 Build-Depends: debhelper-compat (= 13),
-               cargo (>= 1.88),
-               rustc (>= 1.88),
+               cargo (>= 1.92),
+               rustc (>= 1.92),
                pkg-config,
                libfontconfig-dev
 Standards-Version: 4.6.0

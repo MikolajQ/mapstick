@@ -278,7 +278,7 @@ terminal, użyj nudl bezpośrednio.
 
 ## Budowanie ze źródeł
 
-Potrzebny jest Rust 1.88 lub nowszy. Na Linuksie także nagłówki fontconfig,
+Potrzebny jest Rust 1.92 lub nowszy. Na Linuksie także nagłówki fontconfig,
 xkbcommon, Wayland i libudev (Debian/Ubuntu:
 `libfontconfig1-dev libxkbcommon-dev libwayland-dev libudev-dev`).
 
