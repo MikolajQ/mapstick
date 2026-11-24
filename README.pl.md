@@ -156,6 +156,41 @@ przez serwer bywa zerowa albo błędna.
 
 ## Instalacja
 
+### Ubuntu i pochodne
+
+Ubuntu 24.04 lub nowsze, Linux Mint 22, Pop!_OS 24.04 i inne na nich oparte —
+z PPA, z aktualizacjami przez systemowe narzędzie aktualizacji:
+
+```sh
+sudo add-apt-repository ppa:mikolaj-q/mapstick
+sudo apt install mapstick
+```
+
+Na Ubuntu 22.04 i Linux Mint 21 użyj [AppImage](#appimage-każda-dystrybucja).
+
+### Debian
+
+Debian 13 lub nowszy: pobierz `mapstick_<wersja>_amd64.deb` z
+[najnowszego wydania](https://github.com/MikolajQ/mapstick/releases/latest)
+i zainstaluj:
+
+```sh
+sudo apt install ./mapstick_*_amd64.deb
+```
+
+Pobrany `.deb` sam się nie aktualizuje — następną wersję instaluje się tak samo.
+Na Debianie 12 użyj [AppImage](#appimage-każda-dystrybucja).
+
+### Fedora
+
+Z [Copr](https://copr.fedorainfracloud.org/coprs/mikolaj-q/mapstick/),
+z aktualizacjami przez `dnf`:
+
+```sh
+sudo dnf copr enable mikolaj-q/mapstick
+sudo dnf install mapstick
+```
+
 ### Arch Linux i pochodne
 
 Z AUR, jako gotowa binarka albo budowany ze źródeł:
@@ -163,6 +198,27 @@ Z AUR, jako gotowa binarka albo budowany ze źródeł:
 ```sh
 yay -S mapstick-bin   # albo: yay -S mapstick
 ```
+
+### AppImage (każda dystrybucja)
+
+Jeden plik, który działa na każdej 64-bitowej dystrybucji z glibc 2.35 lub
+nowszą: Ubuntu 22.04 i Debian 12 lub nowsze, aktualna Fedora, openSUSE
+Tumbleweed i inne. Pobierz `MapStick-<wersja>-x86_64.AppImage` z
+[najnowszego wydania](https://github.com/MikolajQ/mapstick/releases/latest),
+nadaj mu prawo wykonywania i uruchom:
+
+```sh
+chmod +x MapStick-*-x86_64.AppImage
+./MapStick-*-x86_64.AppImage
+```
+
+- Trzymaj plik w jednym miejscu (np. `~/Applications`): stamtąd uruchamia go
+  sprawdzanie w tle. Po przeniesieniu otwórz MapSticka raz z nowego miejsca.
+- [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) albo
+  AppImageLauncher dodadzą go do menu aplikacji i będą go aktualizować
+  z GitHuba.
+- Potrzebny jest FUSE, który mają dystrybucje z pulpitem. Bez niego uruchom
+  z opcją `--appimage-extract-and-run`.
 
 ### Inne dystrybucje Linuksa
 
@@ -176,10 +232,13 @@ cd mapstick-*-x86_64-linux
 ./install.sh              # do ~/.local; ./install.sh --uninstall usuwa
 ```
 
-MapStick potrzebuje **udisks2** do wykrywania nośników (jest w większości
-dystrybucji z pulpitem) i agenta **polkit** do formatowania. Formatowanie do
-exFAT wymaga pakietu **exfatprogs**. Sprawdzanie w tle korzysta z timera
-użytkownika systemd, a bez niego z crona albo z uruchamiania przy logowaniu.
+### Czego MapStick potrzebuje na Linuksie
+
+**udisks2** do wykrywania nośników (jest w większości dystrybucji z pulpitem;
+paczki doinstalowują go same) i agenta **polkit** do formatowania.
+Formatowanie do exFAT wymaga pakietu **exfatprogs**. Sprawdzanie w tle
+korzysta z timera użytkownika systemd, a bez niego z crona albo
+z uruchamiania przy logowaniu.
 
 ### Windows
 

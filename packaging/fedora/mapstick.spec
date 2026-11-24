@@ -9,7 +9,7 @@
 # fix for the same MapStick version.
 
 Name:           mapstick
-Version:        0.1.0
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        Navigation map updater for Hyundai, Kia and Genesis cars
 

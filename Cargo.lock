@@ -3210,7 +3210,7 @@ dependencies = [
 
 [[package]]
 name = "mapstick"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "cap-std",
@@ -3237,7 +3237,7 @@ dependencies = [
 
 [[package]]
 name = "mapstick-media"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "nudl",
  "rustix 1.1.4",
@@ -3254,7 +3254,7 @@ dependencies = [
 
 [[package]]
 name = "mapstick-store"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "fs4",
  "jiff",

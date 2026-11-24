@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.1
+
+- AppImage for any 64-bit Linux distribution with glibc 2.35 or newer
+  (Ubuntu 22.04, Debian 12 and newer). Background checks and notifications
+  start the `.AppImage` file itself, and AppImageUpdate or Gear Lever can
+  update it from GitHub releases.
+- Packages for Ubuntu 24.04 and newer (`ppa:mikolaj-q/mapstick`), Fedora
+  (Copr `mikolaj-q/mapstick`) and a `.deb` for Debian 13 and newer, built from
+  every release.
+- Building from source needs Rust 1.92 or newer.
+
 ## 0.1.0
 
 First public release.
