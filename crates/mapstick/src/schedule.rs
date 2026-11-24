@@ -77,8 +77,82 @@ const LEGACY_NAME: &str = "mapstick-sprawdzanie";
 
 /// Ścieżka do naszej binarki. Harmonogram wymaga bezwzględnej — nie wie nic
 /// o katalogu, z którego ktoś uruchomił aplikację.
-fn binary() -> Result<PathBuf> {
-    std::env::current_exe().with_context(|| tr!("Could not find where the MapStick program is"))
+pub(crate) fn binary() -> Result<PathBuf> {
+    let exe = std::env::current_exe()
+        .with_context(|| tr!("Could not find where the MapStick program is"))?;
+
+    #[cfg(target_os = "linux")]
+    if let Some(appimage) = appimage_file(
+        std::env::var_os("APPIMAGE"),
+        std::env::var_os("APPDIR"),
+        &exe,
+    ) {
+        return Ok(appimage);
+    }
+
+    Ok(exe)
+}
+
+/// Plik .AppImage, z którego działamy, jeśli działamy z AppImage.
+///
+/// Wewnątrz AppImage `current_exe()` leży na tymczasowym montowaniu
+/// (`/tmp/.mount_…`), które znika razem z procesem: timer zapisany z tą
+/// ścieżką padłby przy pierwszym uruchomieniu po zamknięciu okna. Trwały jest
+/// sam plik — jego ścieżkę runtime AppImage podaje w `$APPIMAGE`, a miejsce
+/// montowania w `$APPDIR`.
+///
+/// `$APPIMAGE` bierzemy tylko wtedy, gdy nasza binarka naprawdę leży
+/// w `$APPDIR`: obie zmienne dziedziczy każdy proces uruchomiony z innej
+/// AppImage (terminal, edytor), także MapStick zainstalowany z paczki.
+#[cfg(target_os = "linux")]
+fn appimage_file(
+    appimage: Option<std::ffi::OsString>,
+    appdir: Option<std::ffi::OsString>,
+    exe: &std::path::Path,
+) -> Option<PathBuf> {
+    let appimage = PathBuf::from(appimage?);
+    let appdir = PathBuf::from(appdir?);
+
+    (appimage.is_absolute() && appdir.is_absolute() && exe.starts_with(&appdir)).then_some(appimage)
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod appimage_tests {
+    use super::appimage_file;
+    use std::path::{Path, PathBuf};
+
+    const MOUNT: &str = "/tmp/.mount_MapStiAbC123";
+    const FILE: &str = "/home/ola/Apps/MapStick-0.1.1-x86_64.AppImage";
+
+    fn file(appimage: Option<&str>, appdir: Option<&str>, exe: &str) -> Option<PathBuf> {
+        appimage_file(
+            appimage.map(Into::into),
+            appdir.map(Into::into),
+            Path::new(exe),
+        )
+    }
+
+    #[test]
+    fn inside_an_appimage_the_file_is_used() {
+        let exe = format!("{MOUNT}/usr/bin/mapstick");
+        assert_eq!(
+            file(Some(FILE), Some(MOUNT), &exe),
+            Some(PathBuf::from(FILE))
+        );
+    }
+
+    #[test]
+    fn variables_inherited_from_another_appimage_are_ignored() {
+        assert_eq!(file(Some(FILE), Some(MOUNT), "/usr/bin/mapstick"), None);
+    }
+
+    #[test]
+    fn without_the_variables_nothing_changes() {
+        assert_eq!(file(None, None, "/usr/bin/mapstick"), None);
+        let exe = format!("{MOUNT}/usr/bin/mapstick");
+        assert_eq!(file(Some(FILE), None, &exe), None);
+        assert_eq!(file(Some("MapStick.AppImage"), Some(MOUNT), &exe), None);
+    }
 }
 
 #[cfg(target_os = "linux")]

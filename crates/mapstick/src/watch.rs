@@ -576,7 +576,9 @@ fn show(notification: notify_rust::Notification, _news: &News) -> Result<()> {
 /// Uruchamia aplikację na wskazanym modelu.
 #[cfg(target_os = "linux")]
 fn open_app(model_id: &str) {
-    let Ok(exe) = std::env::current_exe() else {
+    // Z AppImage — sam plik .AppImage, nie binarka z jego montowania: to
+    // znika, gdy kończy się sprawdzanie, a okno ma żyć dalej.
+    let Ok(exe) = crate::schedule::binary() else {
         return;
     };
 
