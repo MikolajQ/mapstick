@@ -1,0 +1,49 @@
+Source: mapstick
+Section: utils
+Priority: optional
+Maintainer: Mikołaj <1713112+MikolajQ@users.noreply.github.com>
+# Ubuntu 22.04 and 24.04 ship a Rust that is too old by default; for them
+# packaging/debian-source.sh swaps these two for versioned toolchains such
+# as cargo-1.91 and rustc-1.91, which debian/rules then puts first in PATH.
+Build-Depends: debhelper-compat (= 13),
+               cargo (>= 1.88),
+               rustc (>= 1.88),
+               pkg-config,
+               libfontconfig-dev
+Standards-Version: 4.6.0
+Rules-Requires-Root: no
+Homepage: https://github.com/MikolajQ/mapstick
+Vcs-Browser: https://github.com/MikolajQ/mapstick
+Vcs-Git: https://github.com/MikolajQ/mapstick.git
+
+Package: mapstick
+Architecture: amd64 arm64
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         hicolor-icon-theme,
+         libxkbcommon0,
+         udisks2
+# Loaded at run time (dlopen), so dpkg-shlibdeps cannot see them: OpenGL
+# rendering (there is a software fallback), Wayland and X11 windows.
+Recommends: exfatprogs,
+            libegl1,
+            libwayland-client0,
+            libwayland-cursor0,
+            libx11-6,
+            libx11-xcb1,
+            libxcursor1,
+            libxi6,
+            libxkbcommon-x11-0,
+            libxrandr2
+Description: navigation map updater for Hyundai, Kia and Genesis cars
+ MapStick downloads the official navigation and infotainment software for
+ a car straight from the maker's update servers and puts it on a USB drive,
+ ready to plug into the car — the job of the maker's Navigation Updater,
+ which is not available for Linux.
+ .
+ It shows how much space an update needs before downloading anything,
+ writes half as much to the USB drive as the official tool, finds a car by
+ its VIN and can check in the background for new map releases.
+ .
+ MapStick is an unofficial project, not affiliated with Hyundai Motor
+ Company, Kia Corporation or Genesis.

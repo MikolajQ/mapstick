@@ -1,0 +1,48 @@
+#!/usr/bin/make -f
+# SPDX-FileCopyrightText: 2026 Mikołaj
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# The source package is the vendored release archive
+# (packaging/source-tarball.sh): every crate is inside and .cargo/config.toml
+# points cargo at it, so the build needs no network — Launchpad has none.
+
+# Versioned toolchains (rustc-1.NN, cargo-1.NN on Ubuntu 22.04 and 24.04)
+# live in /usr/lib/rust-1.NN/bin and take precedence over the default one.
+RUST_BIN := $(lastword $(sort $(wildcard /usr/lib/rust-1.*/bin)))
+ifneq ($(RUST_BIN),)
+export PATH := $(RUST_BIN):$(PATH)
+endif
+
+export CARGO_HOME := $(CURDIR)/debian/cargo-home
+export CARGO_NET_OFFLINE := true
+
+JOBS := $(patsubst parallel=%,-j%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+DEST := debian/mapstick
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cargo --version
+	cargo build --release --frozen $(JOBS) --package mapstick
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	cargo test --release --frozen $(JOBS) --workspace
+endif
+
+override_dh_auto_install:
+	install -Dm0755 target/release/mapstick $(DEST)/usr/bin/mapstick
+	install -Dm0644 packaging/mapstick.desktop $(DEST)/usr/share/applications/mapstick.desktop
+	install -Dm0644 packaging/icons/mapstick.svg $(DEST)/usr/share/icons/hicolor/scalable/apps/mapstick.svg
+	set -e; for size in 16 32 48 64 128 256 512; do \
+	    install -Dm0644 packaging/icons/mapstick-$$size.png \
+	        $(DEST)/usr/share/icons/hicolor/$${size}x$$size/apps/mapstick.png; \
+	done
+
+override_dh_auto_clean:
+	rm -rf target debian/cargo-home
+
+# The release profile already strips the binary (Cargo.toml); there is no
+# debug information for dwz to compress.
+override_dh_dwz:

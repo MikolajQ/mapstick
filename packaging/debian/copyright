@@ -1,0 +1,29 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: MapStick
+Upstream-Contact: https://github.com/MikolajQ/mapstick/issues
+Source: https://github.com/MikolajQ/mapstick
+
+Files: *
+Copyright: 2026 Mikołaj
+License: GPL-3.0-only
+
+Files: vendor/*
+Copyright: the authors of each crate, as listed in its Cargo.toml
+License: various
+ The Rust dependencies compiled into the program, each under its own
+ licence — mostly MIT, Apache-2.0, or either of the two; the licence of
+ every crate is in vendor/<crate>/Cargo.toml and its licence files.
+ Crates that Linux never compiles are kept only as empty stubs.
+
+License: GPL-3.0-only
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, version 3.
+ .
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ On Debian systems, the complete text of the GNU General Public License
+ version 3 can be found in "/usr/share/common-licenses/GPL-3".
