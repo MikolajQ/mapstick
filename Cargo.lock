@@ -3499,7 +3499,7 @@ dependencies = [
 [[package]]
 name = "nudl"
 version = "1.3.0"
-source = "git+https://github.com/MikolajQ/nudl?rev=bb7dc91365cea01abc383e747a85a951ff0f7474#bb7dc91365cea01abc383e747a85a951ff0f7474"
+source = "git+https://github.com/MikolajQ/nudl?rev=4d0ba6b9d07cb3369b14da4320ac44fdf01c7b43#4d0ba6b9d07cb3369b14da4320ac44fdf01c7b43"
 dependencies = [
  "aes",
  "anstyle-progress",
@@ -3515,7 +3515,6 @@ dependencies = [
  "futures-core",
  "indicatif",
  "jiff",
- "rawzip",
  "reqwest",
  "rustls",
  "serde",
@@ -3528,7 +3527,6 @@ dependencies = [
  "unicode-width",
  "urlencoding",
  "winnow-args",
- "zipunsplitlib",
 ]
 
 [[package]]
@@ -4568,12 +4566,6 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "objc2-quartz-core 0.3.2",
 ]
-
-[[package]]
-name = "rawzip"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75a2b2577f5fd7e26caabd4aa7bba1ef18653ff32204eea251c1136db1a549f3"
 
 [[package]]
 name = "rayon"
@@ -6602,7 +6594,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7511,14 +7503,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.4",
-]
-
-[[package]]
-name = "zipunsplitlib"
-version = "1.0.0"
-source = "git+https://github.com/chenxiaolong/zipunsplit.git?tag=v1.0.0#ca8f56f167477c9e6733db46f2b329386b33f7fb"
-dependencies = [
- "thiserror 2.0.20",
 ]
 
 [[package]]

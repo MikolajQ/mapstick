@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Archives are unpacked part by part while they download, so a download no
+  longer ends with a long unpacking phase. The progress line now shows the
+  unpacked amount growing right behind the downloaded one, where it used to
+  stand still until all parts of the large map file had arrived.
+
 ## 0.1.1
 
 - AppImage for any 64-bit Linux distribution with glibc 2.35 or newer
